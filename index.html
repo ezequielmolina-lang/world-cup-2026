@@ -94,6 +94,37 @@
   footer { margin-top:34px; text-align:center; font-size:12.5px; color: var(--muted); line-height:1.7; }
   footer a { font-weight:700; }
   footer .sep { opacity:0.4; margin:0 6px; }
+
+  /* ---------- MOBILE ---------- */
+  @media (max-width: 560px) {
+    .wrap { padding: 10px 10px 48px; }
+    header { padding: 26px 18px 22px; border-radius: 20px; }
+    .center-circle { width: 160px; height: 160px; top: 58px; }
+    .center-circle::after { left: -150px; width: 460px; }
+    .trophy { font-size: 42px; }
+    .eyebrow { letter-spacing: 2px; font-size: 10px; padding: 5px 12px; margin: 8px 0 10px; }
+    .hero-sub { font-size: 14px; margin-top: 10px; }
+    .statusbar { gap: 7px 12px; padding: 9px 12px; font-size: 12px; margin-top: 14px; }
+    .refresh-btn { padding: 6px 12px; font-size: 12px; }
+    .chips { gap: 7px; padding: 14px 2px 2px; }
+    .chip { padding: 8px 13px; font-size: 13px; }
+    .daygroup { margin-top: 18px; }
+    .dayhdr { font-size: 11.5px; letter-spacing: 1px; margin-bottom: 10px; }
+    .match { padding: 12px 13px; border-radius: 14px; margin-bottom: 9px; }
+    .m-stage { font-size: 10px; }
+    .pill { font-size: 10.5px; padding: 4px 9px; }
+    .team { gap: 10px; }
+    .team .badge { width: 26px; height: 26px; }
+    .team .name { font-size: 15px; }
+    .team .score { font-size: 20px; min-width: 22px; }
+    .m-venue { font-size: 11.5px; }
+  }
+  @media (max-width: 360px) {
+    header h1 { font-size: 26px; }
+    .team .name { font-size: 14px; }
+    .team .score { font-size: 19px; }
+    .chip { padding: 7px 11px; font-size: 12.5px; }
+  }
 </style>
 </head>
 <body>
