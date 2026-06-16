@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work vs World Cup — Live Fixture 2026</title>
+<meta name="description" content="Every 2026 World Cup match and result, updating on its own. No ads, no pop-ups, just the scores — in your own timezone.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --pitch: #0e6b49; --pitch-mid: #0a4d36; --pitch-dark: #06301f; --night: #04241a;
+    --gold: #E2A52B; --gold-light: #F4CE63;
+    --navy: #0F2A22; --cloud: #eef5f1; --paper: #ffffff;
+    --live: #ef4655; --panel: rgba(255,255,255,0.045); --panel-line: rgba(255,255,255,0.10);
+    --muted: #9fc3b2;
+  }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: var(--night); color: #eaf4ee; line-height: 1.5; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 14px 14px 60px; }
+  a { color: var(--gold-light); }
+
+  /* HERO */
+  header {
+    position: relative; overflow: hidden; border-radius: 26px;
+    padding: 32px 26px 26px; text-align: center; color: #fff;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(255,247,214,0.45) 0%, rgba(255,247,214,0) 44%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 60px, rgba(255,255,255,0) 60px 120px),
+      linear-gradient(165deg, #0e6b49 0%, #0a4d36 60%, #06301f 120%);
+  }
+  .center-circle { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); width: 200px; height: 200px; border: 2px solid rgba(255,255,255,0.14); border-radius: 50%; z-index: 0; }
+  .center-circle::after { content:""; position:absolute; top:50%; left:-170px; width:540px; height:2px; background:rgba(255,255,255,0.11); }
+  header > * { position: relative; z-index: 1; }
+  .trophy { font-size: 50px; line-height: 1; filter: drop-shadow(0 6px 16px rgba(226,165,43,0.5)); }
+  .eyebrow { display:inline-block; background: rgba(4,36,26,0.4); color: var(--gold-light); font-size: 11px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; padding: 6px 14px; border-radius: 20px; margin: 10px 0 12px; }
+  header h1 { font-size: clamp(28px, 7vw, 46px); font-weight: 900; line-height: 1.03; letter-spacing: -1px; text-shadow: 0 4px 20px rgba(4,36,26,0.4); }
+  header h1 .pop { color: var(--gold-light); }
+  .hero-sub { font-size: clamp(14px, 3.4vw, 16px); max-width: 520px; margin: 12px auto 0; opacity: 0.95; }
+
+  /* STATUS BAR */
+  .statusbar { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; margin-top:18px; background: rgba(4,36,26,0.5); border:1px solid rgba(255,255,255,0.16); border-radius:14px; padding:10px 14px; font-size:13px; }
+  .live-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background: var(--gold-light); margin-right:7px; vertical-align:middle; }
+  .live-dot.on { background: var(--live); box-shadow:0 0 0 0 rgba(239,70,85,0.7); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(239,70,85,0.6);} 70%{box-shadow:0 0 0 9px rgba(239,70,85,0);} 100%{box-shadow:0 0 0 0 rgba(239,70,85,0);} }
+  .statusbar .upd { color:#cfe6da; }
+  .statusbar .tz { color: var(--muted); }
+  .refresh-btn { background: var(--gold); color: var(--navy); border:none; padding:7px 14px; border-radius:10px; font-size:12.5px; font-weight:800; cursor:pointer; }
+  .refresh-btn:disabled { opacity:0.6; cursor:default; }
+
+  /* FILTER CHIPS */
+  .chips { display:flex; gap:8px; overflow-x:auto; padding:18px 2px 4px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:0 0 auto; background: var(--panel); color:#dceee5; border:1px solid var(--panel-line); padding:9px 16px; border-radius:999px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; transition: all .15s; }
+  .chip:hover { border-color: rgba(244,206,99,0.5); }
+  .chip.active { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+  .chip .n { opacity:0.7; font-weight:800; margin-left:5px; font-size:12px; }
+  .chip.active .n { opacity:0.85; }
+
+  /* BOARD */
+  #board { margin-top:10px; }
+  .daygroup { margin-top:22px; }
+  .dayhdr { display:flex; align-items:center; gap:10px; font-size:12.5px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color: var(--gold-light); margin:0 4px 12px; }
+  .dayhdr::after { content:""; flex:1; height:1px; background: rgba(255,255,255,0.10); }
+  .dayhdr .rel { color: var(--muted); font-weight:700; letter-spacing:0.5px; text-transform:none; }
+
+  .match { background: var(--panel); border:1px solid var(--panel-line); border-radius:16px; padding:13px 15px; margin-bottom:10px; }
+  .match.islive { border-color: rgba(239,70,85,0.55); background: linear-gradient(180deg, rgba(239,70,85,0.07), rgba(255,255,255,0.03)); }
+  .m-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:9px; }
+  .m-stage { font-size:11px; font-weight:800; letter-spacing:0.8px; text-transform:uppercase; color: var(--muted); }
+  .pill { font-size:11px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; padding:4px 10px; border-radius:999px; white-space:nowrap; }
+  .pill.live { background: var(--live); color:#fff; }
+  .pill.live::before { content:"● "; }
+  .pill.ft { background: rgba(255,255,255,0.12); color:#dceee5; }
+  .pill.soon { background: rgba(226,165,43,0.16); color: var(--gold-light); border:1px solid rgba(226,165,43,0.4); }
+  .pill.ppd { background: rgba(255,255,255,0.08); color: var(--muted); }
+
+  .team { display:flex; align-items:center; gap:11px; padding:4px 0; }
+  .team .badge { width:30px; height:30px; flex:0 0 auto; border-radius:6px; object-fit:contain; background: rgba(255,255,255,0.10); }
+  .team .badge.txt { display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#bfe0cf; }
+  .team .name { flex:1; font-size:16px; font-weight:600; color:#f1f8f4; }
+  .team .score { font-size:22px; font-weight:900; min-width:26px; text-align:right; color:#fff; font-variant-numeric: tabular-nums; }
+  .team.win .name { font-weight:800; }
+  .team.lose .name, .team.lose .score { color: #a9c6b8; }
+  .m-venue { margin-top:9px; font-size:12.5px; color: var(--muted); display:flex; align-items:center; gap:6px; }
+
+  /* STATES */
+  .state { text-align:center; padding:48px 20px; color: var(--muted); }
+  .state .big { font-size:40px; margin-bottom:10px; }
+  .state h3 { color:#eaf4ee; font-size:18px; margin-bottom:6px; }
+  .state p { font-size:14px; max-width:420px; margin:0 auto 14px; }
+  .skel { height:84px; border-radius:16px; background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 37%, rgba(255,255,255,0.04) 63%); background-size:400% 100%; animation: shimmer 1.4s infinite; margin-bottom:10px; }
+  @keyframes shimmer { 0%{background-position:100% 0;} 100%{background-position:-100% 0;} }
+
+  footer { margin-top:34px; text-align:center; font-size:12.5px; color: var(--muted); line-height:1.7; }
+  footer a { font-weight:700; }
+  footer .sep { opacity:0.4; margin:0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="center-circle"></div>
+    <div class="trophy">🏆</div>
+    <span class="eyebrow">⚽ The World Cup Edition · 2026</span>
+    <h1>Work vs <span class="pop">World Cup</span></h1>
+    <p class="hero-sub">Every match and every result, updating on its own. No ads, no pop-ups, no autoplay clearing its throat — just the scores, in your own timezone.</p>
+    <div class="statusbar">
+      <span class="upd"><span class="live-dot" id="dot"></span><span id="updtext">Loading the fixture…</span></span>
+      <span class="tz" id="tztext"></span>
+      <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="chips" id="chips"></div>
+
+  <div id="board">
+    <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+  </div>
+
+  <footer>
+    <div>Unofficial live tracker · scores refresh automatically.</div>
+    <div>Acting up? <a href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026" target="_blank" rel="noopener">FIFA's official page</a><span class="sep">·</span>Built for AI Tuesday ⚽</div>
+  </footer>
+
+</div>
+
+<script>
+/* ============================================================
+   Work vs World Cup — live 2026 World Cup fixture tracker
+   Data: ESPN public soccer scoreboard (no key, CORS *, no cap).
+   The range query truncates at 100 events, so we sweep the
+   tournament in phase-sized windows, merge + dedupe by id,
+   cache in localStorage, and auto-refresh the live window.
+   No backend, no build step.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  var ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=";
+  // phase-sized windows (each well under ESPN's 100-event range cap); overlaps are fine — we dedupe by id
+  var WINDOWS = [
+    "20260611-20260616", // group MD1
+    "20260617-20260622", // group MD2
+    "20260623-20260627", // group MD3
+    "20260628-20260703", // round of 32
+    "20260704-20260708", // round of 16
+    "20260709-20260712", // quarter-finals
+    "20260713-20260719"  // semis, 3rd place, final
+  ];
+  var CACHE_PREFIX = "wc2026e:";
+  var REFRESH_MS = 60000;
+  var REQ_TIMEOUT = 13000;
+
+  var EVENTS = {};            // idEvent -> normalized event
+  var activeChip = null;
+  var firstPaintDone = false;
+  var renderTimer = null;
+  var anyFetchOk = false;
+
+  var TZ = "";
+  try { TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
+
+  /* ---------- helpers ---------- */
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function utcTodayStr() { return new Date().toISOString().slice(0, 10); }
+  function ymd(dateStr) { return dateStr.slice(0, 10); }        // "2026-06-16T19:00Z" -> "2026-06-16"
+  function localDateKey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function kickoff(ev) { if (!ev.strTimestamp) return null; var d = new Date(ev.strTimestamp); return isNaN(d) ? null : d; }
+  function hasScore(ev) {
+    return ev.intHomeScore !== null && ev.intHomeScore !== "" && ev.intHomeScore !== undefined &&
+           ev.intAwayScore !== null && ev.intAwayScore !== "" && ev.intAwayScore !== undefined;
+  }
+  function esc(s) { return (s || "").replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  /* ---------- phase / stage label (ESPN's season.slug is authoritative) ---------- */
+  var STAGE_MAP = {
+    "group-stage": "Group Stage", "round-of-32": "Round of 32", "round-of-16": "Round of 16",
+    "quarterfinals": "Quarter-finals", "semifinals": "Semi-finals", "3rd-place-match": "Third place", "final": "Final"
+  };
+  function prettySlug(sl) { return sl.replace(/-/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+  function stageLabel(ev) {
+    if (ev._slug) return STAGE_MAP[ev._slug] || prettySlug(ev._slug);
+    var ko = kickoff(ev); if (!ko) return "World Cup";        // fallback only if slug is ever missing
+    var s = ko.toISOString().slice(0, 10);
+    if (s <= "2026-06-28") return "Group Stage";
+    if (s <= "2026-07-03") return "Round of 32";
+    if (s <= "2026-07-08") return "Round of 16";
+    if (s <= "2026-07-12") return "Quarter-finals";
+    if (s <= "2026-07-17") return "Semi-finals";
+    if (s === "2026-07-18") return "Third place";
+    return "Final";
+  }
+
+  /* ---------- normalize one ESPN event ---------- */
+  function normalize(e) {
+    if (!e || !e.id) return null;
+    var comp = (e.competitions && e.competitions[0]) || {};
+    var cs = comp.competitors || [];
+    var home = null, away = null;
+    for (var i = 0; i < cs.length; i++) { if (cs[i].homeAway === "home") home = cs[i]; else if (cs[i].homeAway === "away") away = cs[i]; }
+    home = home || cs[0] || {}; away = away || cs[1] || {};
+    var st = (e.status && e.status.type) || {};
+    var nm = (st.name || "").toUpperCase();
+    var cls;
+    if (/POSTPON|CANCEL|ABANDON|SUSPEND/.test(nm)) cls = "ppd";
+    else if (st.state === "in") cls = "live";
+    else if (st.state === "post") cls = "finished";
+    else cls = "upcoming";
+    var parts = (e.shortName || "").split(" @ ");   // "AWAY @ HOME"
+    function teamName(side, fallback) {
+      return (side.team && (side.team.displayName || side.team.shortDisplayName || side.team.abbreviation)) || fallback || "TBD";
+    }
+    return {
+      idEvent: e.id,
+      strHomeTeam: teamName(home, parts[1]),
+      strAwayTeam: teamName(away, parts[0]),
+      strHomeTeamBadge: home.team && home.team.logo,
+      strAwayTeamBadge: away.team && away.team.logo,
+      intHomeScore: (home.score === undefined ? null : home.score),
+      intAwayScore: (away.score === undefined ? null : away.score),
+      strTimestamp: e.date,
+      strVenue: comp.venue && comp.venue.fullName,
+      strCity: comp.venue && comp.venue.address && comp.venue.address.city,
+      _detail: st.shortDetail || st.detail || "",
+      _cls: cls,
+      _slug: (e.season && e.season.slug) || "",
+      _winHome: !!home.winner,
+      _winAway: !!away.winner
+    };
+  }
+  function ingest(events) {
+    if (!events) return;
+    for (var i = 0; i < events.length; i++) {
+      var n = normalize(events[i]);
+      if (n) EVENTS[n.idEvent] = n;
+    }
+    scheduleRender();
+  }
+
+  /* ---------- window status + cache ---------- */
+  function winState(range) {
+    var a = range.slice(0, 4) + "-" + range.slice(4, 6) + "-" + range.slice(6, 8);
+    var b = range.slice(9, 13) + "-" + range.slice(13, 15) + "-" + range.slice(15, 17);
+    var t = utcTodayStr();
+    if (t < a) return "future";
+    if (t > b) return "past";
+    return "current";
+  }
+  function ttlFor(range) {
+    switch (winState(range)) { case "current": return 45 * 1000; case "past": return 6 * 3600 * 1000; default: return 2 * 3600 * 1000; }
+  }
+  function cacheGet(range) {
+    try { var raw = localStorage.getItem(CACHE_PREFIX + range); if (!raw) return null; var o = JSON.parse(raw);
+      if (Date.now() - o.ts > ttlFor(range)) return null; return o.events || []; } catch (e) { return null; }
+  }
+  function cacheSet(range, events) {
+    try { localStorage.setItem(CACHE_PREFIX + range, JSON.stringify({ ts: Date.now(), events: events })); } catch (e) {}
+  }
+
+  /* ---------- fetch one window ---------- */
+  function fetchWindow(range, force) {
+    if (!force) { var c = cacheGet(range); if (c) { ingest(c); return Promise.resolve(true); } }
+    var ctrl = new AbortController();
+    var to = setTimeout(function () { ctrl.abort(); }, REQ_TIMEOUT);
+    return fetch(ESPN + range, { signal: ctrl.signal })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (j) {
+        clearTimeout(to); anyFetchOk = true;
+        var evs = (j && j.events) ? j.events : [];
+        cacheSet(range, evs); ingest(evs); return true;
+      })
+      .catch(function () {
+        clearTimeout(to);
+        var stale = null; try { var raw = localStorage.getItem(CACHE_PREFIX + range); if (raw) stale = JSON.parse(raw).events; } catch (e) {}
+        if (stale) ingest(stale);
+        return false;
+      });
+  }
+  function fetchAll(force) {
+    // fetch the window nearest "today" first so live/relevant matches paint immediately
+    var t = utcTodayStr();
+    var ordered = WINDOWS.slice().sort(function (a, b) {
+      function dist(r) { var st = winState(r); if (st === "current") return 0; var a0 = r.slice(0,4)+"-"+r.slice(4,6)+"-"+r.slice(6,8); return Math.abs(new Date(a0)-new Date(t)); }
+      return dist(a) - dist(b);
+    });
+    return Promise.all(ordered.map(function (r) { return fetchWindow(r, force); }));
+  }
+  function currentWindows() {
+    return WINDOWS.filter(function (r) { return winState(r) === "current"; });
+  }
+
+  /* ---------- render scheduling ---------- */
+  function scheduleRender() { if (renderTimer) return; renderTimer = setTimeout(function () { renderTimer = null; render(); }, 100); }
+
+  /* ---------- formatting ---------- */
+  function fmtDayHeader(dkey) {
+    var p = dkey.split("-"), d = new Date(p[0], p[1] - 1, p[2]);
+    var s = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+    var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    var diff = Math.round((d - t0) / 86400000);
+    var rel = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff === -1 ? "Yesterday" : "";
+    return { main: s, rel: rel };
+  }
+  function fmtTime(d) { return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+  function badge(url, name) {
+    if (url) return '<img class="badge" src="' + esc(url) + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">';
+    var ini = (name || "?").replace(/[^A-Za-z ]/g, "").split(" ").map(function (w) { return w[0]; }).join("").slice(0, 3).toUpperCase();
+    return '<span class="badge txt">' + esc(ini) + "</span>";
+  }
+  function pillFor(ev) {
+    var ko = kickoff(ev);
+    if (ev._cls === "live") return '<span class="pill live">' + esc(ev._detail || "Live") + "</span>";
+    if (ev._cls === "finished") return '<span class="pill ft">' + esc(ev._detail || "FT") + "</span>";
+    if (ev._cls === "ppd") return '<span class="pill ppd">Postponed</span>';
+    return '<span class="pill soon">' + (ko ? fmtTime(ko) : "TBD") + "</span>";
+  }
+  function matchCard(ev) {
+    var show = (ev._cls === "live" || ev._cls === "finished") && hasScore(ev);
+    var hWin = "", aWin = "";
+    if (show) {
+      if (ev._cls === "finished" && (ev._winHome || ev._winAway)) { hWin = ev._winHome ? "win" : "lose"; aWin = ev._winAway ? "win" : "lose"; }
+      else { var h = parseInt(ev.intHomeScore, 10), a = parseInt(ev.intAwayScore, 10); if (h > a) { hWin = "win"; aWin = "lose"; } else if (a > h) { aWin = "win"; hWin = "lose"; } }
+    }
+    function row(name, badgeUrl, score, win) {
+      return '<div class="team ' + win + '">' + badge(badgeUrl, name) +
+        '<span class="name">' + esc(name || "TBD") + "</span>" +
+        (show ? '<span class="score">' + esc(String(score)) + "</span>" :
+                (ev._cls === "upcoming" ? "" : '<span class="score">–</span>')) + "</div>";
+    }
+    var venue = ev.strVenue ? '<div class="m-venue">📍 ' + esc(ev.strVenue) + (ev.strCity ? ", " + esc(ev.strCity) : "") + "</div>" : "";
+    return '<div class="match ' + (ev._cls === "live" ? "islive" : "") + '">' +
+      '<div class="m-top"><span class="m-stage">' + esc(stageLabel(ev)) + "</span>" + pillFor(ev) + "</div>" +
+      row(ev.strHomeTeam, ev.strHomeTeamBadge, ev.intHomeScore, hWin) +
+      row(ev.strAwayTeam, ev.strAwayTeamBadge, ev.intAwayScore, aWin) +
+      venue + "</div>";
+  }
+
+  /* ---------- chips ---------- */
+  var CHIPDEFS = [
+    { id: "live", label: "🔴 Live" }, { id: "today", label: "Today" }, { id: "upcoming", label: "Upcoming" },
+    { id: "results", label: "Results" }, { id: "all", label: "All matches" }
+  ];
+  function counts(list) {
+    var c = { live: 0, today: 0, upcoming: 0, results: 0, all: list.length }, todayKey = localDateKey(new Date());
+    list.forEach(function (e) {
+      if (e._cls === "live") c.live++;
+      if (e._cls === "finished" || e._cls === "ppd") c.results++;
+      if (e._cls === "upcoming") c.upcoming++;
+      var ko = kickoff(e); if (ko && localDateKey(ko) === todayKey) c.today++;
+    });
+    return c;
+  }
+  function renderChips(c) {
+    var el = document.getElementById("chips");
+    el.innerHTML = CHIPDEFS.map(function (d) {
+      var n = c[d.id];
+      if (d.id === "live" && !n) return "";
+      return '<button class="chip' + (d.id === activeChip ? " active" : "") + '" data-id="' + d.id + '">' +
+        d.label + (n ? '<span class="n">' + n + "</span>" : "") + "</button>";
+    }).join("");
+    Array.prototype.forEach.call(el.querySelectorAll(".chip"), function (btn) {
+      btn.onclick = function () { activeChip = btn.getAttribute("data-id"); render(); };
+    });
+  }
+
+  /* ---------- main render ---------- */
+  function render() {
+    var list = Object.keys(EVENTS).map(function (k) { return EVENTS[k]; });
+    list.sort(function (a, b) { var ta = kickoff(a), tb = kickoff(b); return (ta ? ta.getTime() : 0) - (tb ? tb.getTime() : 0); });
+    var c = counts(list);
+    if (!activeChip && list.length) activeChip = c.live ? "live" : (c.today ? "today" : (c.upcoming ? "upcoming" : "results"));
+    renderChips(c);
+
+    var board = document.getElementById("board");
+    if (!list.length) { if (firstPaintDone) board.innerHTML = emptyState(); return; }
+    firstPaintDone = true;
+
+    var todayKey = localDateKey(new Date());
+    var filtered = list.filter(function (e) {
+      switch (activeChip) {
+        case "live": return e._cls === "live";
+        case "today": var ko = kickoff(e); return ko && localDateKey(ko) === todayKey;
+        case "upcoming": return e._cls === "upcoming";
+        case "results": return e._cls === "finished" || e._cls === "ppd";
+        default: return true;
+      }
+    });
+    if (activeChip === "results") filtered.reverse();
+    if (!filtered.length) { board.innerHTML = emptyTab(); return; }
+
+    var groups = [], idx = {};
+    filtered.forEach(function (e) {
+      var ko = kickoff(e), key = ko ? localDateKey(ko) : "tbd";
+      if (!(key in idx)) { idx[key] = groups.length; groups.push({ key: key, items: [] }); }
+      groups[idx[key]].items.push(e);
+    });
+    board.innerHTML = groups.map(function (g) {
+      var hdr;
+      if (g.key === "tbd") hdr = '<div class="dayhdr">Date TBD</div>';
+      else { var f = fmtDayHeader(g.key); hdr = '<div class="dayhdr">' + f.main + (f.rel ? ' <span class="rel">· ' + f.rel + "</span>" : "") + "</div>"; }
+      return '<div class="daygroup">' + hdr + g.items.map(matchCard).join("") + "</div>";
+    }).join("");
+  }
+
+  function emptyState() {
+    return '<div class="state"><div class="big">📡</div><h3>Couldn\'t reach the live feed</h3>' +
+      '<p>It retries on its own every minute. In the meantime, FIFA\'s official scores are one tap away.</p>' +
+      '<a class="refresh-btn" style="text-decoration:none;display:inline-block" href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026" target="_blank" rel="noopener">FIFA official →</a></div>';
+  }
+  function emptyTab() {
+    var msg = activeChip === "live" ? "No matches kicking off right now." :
+              activeChip === "today" ? "No matches scheduled for today." :
+              activeChip === "upcoming" ? "No upcoming matches loaded yet." :
+              activeChip === "results" ? "No results in yet." : "Nothing to show.";
+    return '<div class="state"><div class="big">⚽</div><h3>' + msg + '</h3><p>Try another tab — the rest of the tournament is in there.</p></div>';
+  }
+
+  /* ---------- status bar ---------- */
+  function setStatus() {
+    var anyLive = Object.keys(EVENTS).some(function (k) { return EVENTS[k]._cls === "live"; });
+    document.getElementById("dot").className = "live-dot" + (anyLive ? " on" : "");
+    var t = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    var txt;
+    if (!firstPaintDone && !anyFetchOk) txt = "Loading the fixture…";
+    else txt = (anyLive ? "Live now · updated " : "Auto-updating · updated ") + t;
+    document.getElementById("updtext").textContent = txt;
+    document.getElementById("tztext").textContent = TZ ? "🕑 " + TZ.replace(/_/g, " ") : "";
+  }
+
+  /* ---------- refresh ---------- */
+  var refreshing = false;
+  function refreshLive() {
+    if (refreshing) return; refreshing = true;
+    var wins = currentWindows(); if (!wins.length) wins = [WINDOWS[0]];
+    Promise.all(wins.map(function (r) { return fetchWindow(r, true); })).then(function () { refreshing = false; render(); setStatus(); });
+  }
+  window.manualRefresh = function () {
+    var btn = document.getElementById("refreshBtn"); btn.disabled = true; btn.textContent = "↻ …";
+    fetchAll(true).then(function () { btn.disabled = false; btn.textContent = "↻ Refresh"; render(); setStatus(); });
+  };
+
+  /* ---------- boot ---------- */
+  function boot() {
+    fetchAll(false).then(function () { firstPaintDone = true; render(); setStatus(); });
+    setStatus();
+    setInterval(refreshLive, REFRESH_MS);
+    setInterval(setStatus, 30000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshLive(); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
