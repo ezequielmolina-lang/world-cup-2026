@@ -263,6 +263,7 @@
   var STANDINGS = null;       // [{ group, teams:[...] }]
   var STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
   var expanded = {};          // idEvent -> true (match cards expanded to show the timeline)
+  var lastUpdated = 0;        // ms timestamp of last successful refresh (powers "updated Xs ago")
 
   var TZ = "";
   try { TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
@@ -681,13 +682,17 @@
   }
 
   /* ---------- status bar ---------- */
+  function anyLiveNow() { return Object.keys(EVENTS).some(function (k) { return EVENTS[k]._cls === "live"; }); }
   function setStatus() {
-    var anyLive = Object.keys(EVENTS).some(function (k) { return EVENTS[k]._cls === "live"; });
+    var anyLive = anyLiveNow();
     document.getElementById("dot").className = "live-dot" + (anyLive ? " on" : "");
-    var t = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     var txt;
     if (!firstPaintDone && !anyFetchOk) txt = "Loading the fixture…";
-    else txt = (anyLive ? "Live now · updated " : "Auto-updating · updated ") + t;
+    else {
+      var secs = lastUpdated ? Math.max(0, Math.round((Date.now() - lastUpdated) / 1000)) : 0;
+      var ago = !lastUpdated ? "" : secs < 5 ? "just now" : secs < 60 ? secs + "s ago" : Math.round(secs / 60) + "m ago";
+      txt = (anyLive ? "🔴 Live · updated " : "Auto-updating · updated ") + ago;
+    }
     document.getElementById("updtext").textContent = txt;
     document.getElementById("tztext").textContent = TZ ? "🕑 " + TZ.replace(/_/g, " ") : "";
   }
@@ -695,16 +700,41 @@
   /* ---------- refresh ---------- */
   var refreshing = false;
   function refreshLive() {
-    if (refreshing) return; refreshing = true;
+    if (refreshing) return Promise.resolve();
+    refreshing = true;
     var wins = currentWindows(); if (!wins.length) wins = [WINDOWS[0]];
     var jobs = wins.map(function (r) { return fetchWindow(r, true); });
     jobs.push(fetchStandings());
-    Promise.all(jobs).then(function () { refreshing = false; render(); setStatus(); });
+    return Promise.all(jobs)
+      .then(function () { refreshing = false; lastUpdated = Date.now(); render(); setStatus(); })
+      .catch(function () { refreshing = false; });
   }
   window.manualRefresh = function () {
     var btn = document.getElementById("refreshBtn"); btn.disabled = true; btn.textContent = "↻ …";
-    Promise.all([fetchAll(true), fetchStandings()]).then(function () { btn.disabled = false; btn.textContent = "↻ Refresh"; render(); setStatus(); });
+    Promise.all([fetchAll(true), fetchStandings()]).then(function () {
+      lastUpdated = Date.now(); btn.disabled = false; btn.textContent = "↻ Refresh"; render(); setStatus(); scheduleLoop();
+    });
   };
+
+  /* ---------- continuous adaptive refresh loop ----------
+     poll fast while a match is live, back off when idle, and idle hard
+     while the tab is hidden — keeps scores current without hammering. */
+  function nextDelay() {
+    if (anyLiveNow()) return 20000;                              // a match is live → every 20s
+    var now = Date.now(), soon = false;
+    Object.keys(EVENTS).forEach(function (k) {
+      var ko = kickoff(EVENTS[k]); if (ko) { var dt = ko.getTime() - now; if (dt > 0 && dt < 20 * 60000) soon = true; }
+    });
+    return soon ? 60000 : 300000;                                // kickoff within 20 min → 60s; else idle → 5 min
+  }
+  var loopTimer = null;
+  function scheduleLoop() {
+    if (loopTimer) clearTimeout(loopTimer);
+    var delay = document.hidden ? 300000 : nextDelay();
+    loopTimer = setTimeout(function () {
+      (document.hidden ? Promise.resolve() : refreshLive()).then(scheduleLoop);
+    }, delay);
+  }
 
   /* ---------- boot ---------- */
   function boot() {
@@ -719,12 +749,12 @@
       card.classList.toggle("expanded", !!expanded[id]);
       var mt = card.querySelector(".moretxt"); if (mt) mt.textContent = expanded[id] ? "Hide details" : "Match info";
     });
-    fetchAll(false).then(function () { firstPaintDone = true; render(); setStatus(); });
+    fetchAll(false).then(function () { firstPaintDone = true; lastUpdated = Date.now(); render(); setStatus(); });
     fetchStandings().then(function () { if (view === "standings") render(); });
     setStatus();
-    setInterval(refreshLive, REFRESH_MS);
-    setInterval(setStatus, 30000);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshLive(); });
+    scheduleLoop();                                 // adaptive continuous refresh (fast when live, idle otherwise)
+    setInterval(setStatus, 10000);                  // tick the "updated Xs ago" heartbeat
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshLive().then(scheduleLoop); });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
