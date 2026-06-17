@@ -314,6 +314,8 @@
     else if (st.state === "in") cls = "live";
     else if (st.state === "post") cls = "finished";
     else cls = "upcoming";
+    // safety net: no match runs 3.5h — if a feed leaves it flagged "live" past that, treat it as finished
+    if (cls === "live" && e.date) { var ko0 = new Date(e.date); if (!isNaN(ko0) && Date.now() - ko0.getTime() > 12600000) cls = "finished"; }
     var parts = (e.shortName || "").split(" @ ");   // "AWAY @ HOME"
     function teamName(side, fallback) {
       return (side.team && (side.team.displayName || side.team.shortDisplayName || side.team.abbreviation)) || fallback || "TBD";
@@ -414,6 +416,21 @@
   }
   function currentWindows() {
     return WINDOWS.filter(function (r) { return winState(r) === "current"; });
+  }
+  function winBounds(r) { return { a: r.slice(0, 4) + "-" + r.slice(4, 6) + "-" + r.slice(6, 8), b: r.slice(9, 13) + "-" + r.slice(13, 15) + "-" + r.slice(15, 17) }; }
+  function isoShift(s, days) { var d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+  // Which windows the live loop must refresh. Evening matches cross UTC midnight, so a
+  // window can turn "past" while it still holds a live/just-finished match — cover
+  // yesterday→tomorrow, plus any window containing a match still flagged live.
+  function windowsToRefresh() {
+    var set = {}, today = utcTodayStr(), yest = isoShift(today, -1), tom = isoShift(today, 1);
+    WINDOWS.forEach(function (r) { var w = winBounds(r); if (!(w.b < yest || w.a > tom)) set[r] = 1; });
+    Object.keys(EVENTS).forEach(function (k) {
+      var e = EVENTS[k]; if (e._cls !== "live") return;
+      var d = (e.strTimestamp || "").slice(0, 10);
+      WINDOWS.forEach(function (r) { var w = winBounds(r); if (d >= w.a && d <= w.b) set[r] = 1; });
+    });
+    var arr = Object.keys(set); return arr.length ? arr : [WINDOWS[0]];
   }
 
   /* ---------- render scheduling ---------- */
@@ -702,7 +719,7 @@
   function refreshLive() {
     if (refreshing) return Promise.resolve();
     refreshing = true;
-    var wins = currentWindows(); if (!wins.length) wins = [WINDOWS[0]];
+    var wins = windowsToRefresh();
     var jobs = wins.map(function (r) { return fetchWindow(r, true); });
     jobs.push(fetchStandings());
     return Promise.all(jobs)
