@@ -172,6 +172,37 @@
   .searchwrap.has-text .searchclear { display:block; }
   .searchresult { margin:18px 2px 4px; font-size:13px; font-weight:800; letter-spacing:0.3px; color: var(--gold-light); }
 
+  /* BRACKET SIMULATOR — deliberately a DIFFERENT (violet) look so it never reads as real results */
+  .simbanner { margin-top:16px; border:2px dashed #8b5cf6; background: rgba(139,92,246,0.13); border-radius:14px; padding:14px 16px; color:#e9e3ff; }
+  .simbanner .big { font-size:14.5px; font-weight:900; letter-spacing:0.2px; display:block; margin-bottom:4px; }
+  .simbanner small { color:#c3b8e8; font-size:12.5px; line-height:1.5; display:block; }
+  .simbanner b { color:#c4b5fd; }
+  .simchamp { margin-top:14px; text-align:center; background: linear-gradient(180deg, rgba(139,92,246,0.24), rgba(139,92,246,0.05)); border:1px solid rgba(139,92,246,0.55); border-radius:14px; padding:16px; }
+  .simchamp .lab { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#c4b5fd; font-weight:800; }
+  .simchamp .who { font-size:22px; font-weight:900; color:#fff; margin-top:7px; display:flex; align-items:center; justify-content:center; gap:10px; }
+  .simchamp .who img { width:32px; height:32px; border-radius:5px; }
+  .simtools { display:flex; gap:10px; align-items:center; justify-content:space-between; margin-top:16px; }
+  .subnav { display:flex; gap:7px; overflow-x:auto; padding:2px; scrollbar-width:none; flex:1; }
+  .subnav::-webkit-scrollbar { display:none; }
+  .subnav .sb { flex:0 0 auto; background: var(--panel); border:1px solid var(--panel-line); color:#dcd6f5; padding:8px 14px; border-radius:999px; font-size:13px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .subnav .sb.active { background:#8b5cf6; border-color:#8b5cf6; color:#fff; }
+  .simreset { flex:0 0 auto; background:transparent; border:1px solid rgba(139,92,246,0.55); color:#c4b5fd; padding:8px 13px; border-radius:10px; font-size:12.5px; font-weight:800; cursor:pointer; }
+  .bkt-round-title { font-size:12.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:#c4b5fd; margin:18px 2px 10px; }
+  .bkt-match { background: var(--panel); border:1px solid var(--panel-line); border-radius:14px; padding:6px; margin-bottom:10px; }
+  .pickrow { display:flex; align-items:center; gap:11px; padding:11px 12px; border-radius:10px; cursor:pointer; transition: background .12s; }
+  .pickrow:hover { background: rgba(255,255,255,0.05); }
+  .pickrow.win { background: rgba(139,92,246,0.26); }
+  .pickrow.lose { opacity:0.45; }
+  .pickrow.tbd { cursor:default; opacity:0.55; }
+  .pickrow.tbd:hover { background:transparent; }
+  .pickrow .badge { width:26px; height:26px; flex:0 0 auto; border-radius:5px; background: rgba(255,255,255,0.1); object-fit:contain; }
+  .pickrow .pname { flex:1; font-size:15px; font-weight:600; color:#f1f8f4; }
+  .pickrow.win .pname { font-weight:800; }
+  .pickrow .pseed { font-size:11px; color: var(--muted); font-weight:700; }
+  .pickrow .check { color:#c4b5fd; font-weight:900; font-size:15px; opacity:0; }
+  .pickrow.win .check { opacity:1; }
+  .bkt-vs { text-align:center; font-size:10px; letter-spacing:1px; color: var(--muted); margin:1px 0; }
+
   /* ---------- MOBILE ---------- */
   @media (max-width: 560px) {
     .wrap { padding: 10px 10px 48px; }
@@ -543,7 +574,7 @@
   /* ---------- top nav (Matches / Standings / Scorers) ---------- */
   function renderTopNav() {
     var el = document.getElementById("topnav");
-    var defs = [{ id: "matches", label: "⚽ Matches" }, { id: "standings", label: "📊 Standings" }, { id: "scorers", label: "👟 Scorers" }];
+    var defs = [{ id: "matches", label: "⚽ Matches" }, { id: "standings", label: "📊 Standings" }, { id: "scorers", label: "👟 Scorers" }, { id: "bracket", label: "🔮 Bracket" }];
     el.innerHTML = defs.map(function (d) {
       return '<button class="tab' + (d.id === view ? " active" : "") + '" data-v="' + d.id + '">' + d.label + "</button>";
     }).join("");
@@ -565,6 +596,7 @@
         var s = {}; (en.stats || []).forEach(function (x) { s[x.name] = x.displayValue; });
         var t = en.team || {};
         return {
+          id: (t.id || t.displayName || "") + "",
           name: t.displayName || t.shortDisplayName || t.abbreviation,
           logo: (t.logos && t.logos[0] && t.logos[0].href) || t.logo || "",
           gp: s.gamesPlayed, w: s.wins, d: s.ties, l: s.losses,
@@ -640,6 +672,113 @@
     board.innerHTML = '<div class="schdr">👟 Golden Boot race <span>· goals so far</span></div><div class="scorers">' + rows + "</div>";
   }
 
+  /* ---------- bracket simulator (HYPOTHETICAL — the user picks the winners) ----------
+     Structure taken verbatim from ESPN's knockout events (slots + feeder refs).
+     Seeded from the live group standings (a projection while groups are in play). */
+  var simPicks = {};          // "ROUND:m" -> winning team id
+  var simRound = "R32";
+  // FIFA match numbers (73-104) are the canonical bracket wiring — source: official 2026 schedule.
+  var ROUNDS = {
+    R32: [
+      { m: 73, a: "2A", b: "2B" }, { m: 74, a: "1E", b: "T74" }, { m: 75, a: "1F", b: "2C" }, { m: 76, a: "1C", b: "2F" },
+      { m: 77, a: "1I", b: "T77" }, { m: 78, a: "2E", b: "2I" }, { m: 79, a: "1A", b: "T79" }, { m: 80, a: "1L", b: "T80" },
+      { m: 81, a: "1D", b: "T81" }, { m: 82, a: "1G", b: "T82" }, { m: 83, a: "2K", b: "2L" }, { m: 84, a: "1H", b: "2J" },
+      { m: 85, a: "1B", b: "T85" }, { m: 86, a: "1J", b: "2H" }, { m: 87, a: "1K", b: "T87" }, { m: 88, a: "2D", b: "2G" }
+    ],
+    R16: [
+      { m: 89, a: "R32:74", b: "R32:77" }, { m: 90, a: "R32:73", b: "R32:75" }, { m: 91, a: "R32:76", b: "R32:78" }, { m: 92, a: "R32:79", b: "R32:80" },
+      { m: 93, a: "R32:83", b: "R32:84" }, { m: 94, a: "R32:81", b: "R32:82" }, { m: 95, a: "R32:86", b: "R32:88" }, { m: 96, a: "R32:85", b: "R32:87" }
+    ],
+    QF: [{ m: 97, a: "R16:89", b: "R16:90" }, { m: 98, a: "R16:93", b: "R16:94" }, { m: 99, a: "R16:91", b: "R16:92" }, { m: 100, a: "R16:95", b: "R16:96" }],
+    SF: [{ m: 101, a: "QF:97", b: "QF:98" }, { m: 102, a: "QF:99", b: "QF:100" }],
+    FINAL: [{ m: 104, a: "SF:101", b: "SF:102" }]
+  };
+  var THIRD_SLOTS = [
+    { k: "T74", pool: "ABCDF" }, { k: "T77", pool: "CDFGH" }, { k: "T79", pool: "CEFHI" }, { k: "T80", pool: "EHIJK" },
+    { k: "T81", pool: "BEFIJ" }, { k: "T82", pool: "AEHIJ" }, { k: "T85", pool: "EFGIJ" }, { k: "T87", pool: "DEIJL" }
+  ];
+  var ROUND_LABEL = { R32: "Round of 32", R16: "Round of 16", QF: "Quarter-finals", SF: "Semi-finals", FINAL: "Final" };
+  var ROUND_SHORT = { R32: "R32", R16: "R16", QF: "QF", SF: "SF", FINAL: "Final" };
+
+  function numVal(s) { var n = parseInt(s, 10); return isNaN(n) ? 0 : n; }
+  function cmpThird(a, b) { return (numVal(b.pts) - numVal(a.pts)) || (numVal(b.gd) - numVal(a.gd)) || (numVal(b.gf) - numVal(a.gf)); }
+  function mkTeam(t, L) { return { id: (t.id || t.name || "") + "", name: t.name, logo: t.logo, group: L, pts: t.pts, gd: t.gd, gf: t.gf }; }
+  var _seedCache = null, _seedKey = "";
+  function seedSlots() {
+    if (!STANDINGS || !STANDINGS.length) return null;
+    var sig = STANDINGS.map(function (g) { return g.teams.map(function (t) { return (t.name || "") + t.pts + t.gd; }).join(","); }).join("|");
+    if (_seedCache && _seedKey === sig) return _seedCache;
+    var byGroup = {};
+    STANDINGS.forEach(function (g) { var mm = (g.group || "").match(/([A-L])\s*$/i); var L = mm ? mm[1].toUpperCase() : null; if (L) byGroup[L] = g.teams; });
+    var slots = {};
+    Object.keys(byGroup).forEach(function (L) {
+      var t = byGroup[L];
+      if (t[0]) slots["1" + L] = mkTeam(t[0], L);
+      if (t[1]) slots["2" + L] = mkTeam(t[1], L);
+    });
+    var thirds = [];
+    Object.keys(byGroup).forEach(function (L) { if (byGroup[L][2]) thirds.push(mkTeam(byGroup[L][2], L)); });
+    thirds.sort(cmpThird);
+    var top8 = thirds.slice(0, 8), used = {};
+    THIRD_SLOTS.forEach(function (ts) {
+      for (var i = 0; i < top8.length; i++) { var th = top8[i]; if (used[th.group]) continue; if (ts.pool.indexOf(th.group) !== -1) { slots[ts.k] = th; used[th.group] = 1; break; } }
+    });
+    // fallback so all 8 third-slots fill (projection) even if the pool constraint strands one
+    THIRD_SLOTS.forEach(function (ts) {
+      if (slots[ts.k]) return;
+      for (var i = 0; i < top8.length; i++) { if (!used[top8[i].group]) { slots[ts.k] = top8[i]; used[top8[i].group] = 1; break; } }
+    });
+    _seedCache = slots; _seedKey = sig; return slots;
+  }
+  function matchOf(round, m) { var arr = ROUNDS[round] || []; for (var i = 0; i < arr.length; i++) if (arr[i].m === m) return arr[i]; return null; }
+  function resolveRef(ref) {
+    if (/^(R32|R16|QF|SF):/.test(ref)) { var p = ref.split(":"); return winnerOf(p[0], parseInt(p[1], 10)); }
+    var s = seedSlots(); return s ? (s[ref] || null) : null;
+  }
+  function winnerOf(round, m) {
+    var mo = matchOf(round, m); if (!mo) return null;
+    var pickId = simPicks[round + ":" + m]; if (!pickId) return null;
+    var ta = resolveRef(mo.a), tb = resolveRef(mo.b);
+    if (ta && ta.id === pickId) return ta;
+    if (tb && tb.id === pickId) return tb;
+    return null;   // feeder changed under this pick → auto-cleared
+  }
+  function refLabel(ref) {
+    if (/^(R32|R16|QF|SF):/.test(ref)) return "Winner of Match " + ref.split(":")[1];
+    if (/^T\d+$/.test(ref)) return "3rd place (projected)";
+    if (/^1[A-L]$/.test(ref)) return "Winner Group " + ref[1];
+    if (/^2[A-L]$/.test(ref)) return "Runner-up Group " + ref[1];
+    return "TBD";
+  }
+  function bracketMatch(round, mo) {
+    var ta = resolveRef(mo.a), tb = resolveRef(mo.b);
+    var pickId = simPicks[round + ":" + mo.m];
+    function rowHTML(team, ref) {
+      if (!team) return '<div class="pickrow tbd"><span class="badge"></span><span class="pname">' + esc(refLabel(ref)) + "</span></div>";
+      var won = pickId && team.id === pickId, lost = pickId && team.id !== pickId;
+      return '<div class="pickrow ' + (won ? "win" : lost ? "lose" : "") + '" data-round="' + round + '" data-m="' + mo.m + '" data-teamid="' + esc(team.id) + '">' +
+        badge(team.logo, team.name) + '<span class="pname">' + esc(team.name) + "</span>" +
+        (team.group ? '<span class="pseed">' + esc(team.group) + "</span>" : "") + '<span class="check">✓</span></div>';
+    }
+    return '<div class="bkt-match">' + rowHTML(ta, mo.a) + '<div class="bkt-vs">v</div>' + rowHTML(tb, mo.b) + "</div>";
+  }
+  function renderBracket(board) {
+    var banner = '<div class="simbanner"><span class="big">🔮 SIMULATION — your what-if bracket</span>' +
+      "<small>These are <b>your own predictions</b>, not real results. Tap a team to send it through and the next round fills in, so you can see who each team <b>could</b> face. Seeding is <b>projected</b> from the current group standings while the group stage is still being played.</small></div>";
+    if (!seedSlots()) { board.innerHTML = banner + '<div class="state"><div class="big">📊</div><h3>Loading the seeding…</h3><p>The bracket seeds from the live group standings.</p></div>'; return; }
+    var champ = winnerOf("FINAL", ROUNDS.FINAL[0].m);
+    var champHTML = champ ? '<div class="simchamp"><div class="lab">🔮 Your predicted champion</div><div class="who">' + badge(champ.logo, champ.name) + esc(champ.name) + "</div></div>" : "";
+    var rounds = ["R32", "R16", "QF", "SF", "FINAL"];
+    var subnav = '<div class="simtools"><div class="subnav">' + rounds.map(function (r) {
+      return '<button class="sb' + (r === simRound ? " active" : "") + '" data-round="' + r + '">' + ROUND_SHORT[r] + "</button>";
+    }).join("") + '</div><button class="simreset" id="simreset">↺ Reset</button></div>';
+    var arr = ROUNDS[simRound] || [];
+    var matchesHTML = arr.map(function (mo) { return bracketMatch(simRound, mo); }).join("");
+    board.innerHTML = banner + champHTML + subnav + '<div class="bkt-round-title">' + ROUND_LABEL[simRound] + "</div>" + matchesHTML;
+    var rb = document.getElementById("simreset"); if (rb) rb.onclick = function () { simPicks = {}; render(); };
+    Array.prototype.forEach.call(board.querySelectorAll(".subnav .sb"), function (b) { b.onclick = function () { simRound = b.getAttribute("data-round"); render(); }; });
+  }
+
   /* ---------- match detail (expanded on tap): goal + card timeline ---------- */
   function matchDetail(ev) {
     var plays = ev._plays || [];
@@ -698,6 +837,7 @@
     var searchWrap = document.getElementById("searchwrap");
     if (view === "standings") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderStandings(board); return; }
     if (view === "scorers") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderScorers(board); return; }
+    if (view === "bracket") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderBracket(board); return; }
     if (searchWrap) searchWrap.style.display = "block";   // matches view
 
     var list = Object.keys(EVENTS).map(function (k) { return EVENTS[k]; });
@@ -822,6 +962,16 @@
       card.classList.toggle("expanded", !!expanded[id]);
       var mt = card.querySelector(".moretxt"); if (mt) mt.textContent = expanded[id] ? "Hide details" : "Match info";
     });
+    // bracket simulator — tap a team to pick the winner (delegated; survives re-renders)
+    document.getElementById("board").addEventListener("click", function (e) {
+      var pr = e.target.closest ? e.target.closest(".pickrow") : null;
+      if (!pr || pr.classList.contains("tbd")) return;
+      var round = pr.getAttribute("data-round"), m = pr.getAttribute("data-m"), tid = pr.getAttribute("data-teamid");
+      if (!round || !tid) return;
+      var key = round + ":" + m;
+      if (simPicks[key] === tid) delete simPicks[key]; else simPicks[key] = tid;
+      render();
+    });
     // team search — type a country to see all its games, played and upcoming
     (function () {
       var inp = document.getElementById("search"), clr = document.getElementById("searchclear"), wrap = document.getElementById("searchwrap");
@@ -831,7 +981,7 @@
       clr.addEventListener("click", function () { inp.value = ""; searchQuery = ""; wrap.classList.remove("has-text"); inp.focus(); render(); });
     })();
     fetchAll(false).then(function () { firstPaintDone = true; lastUpdated = Date.now(); render(); setStatus(); });
-    fetchStandings().then(function () { if (view === "standings") render(); });
+    fetchStandings().then(function () { if (view === "standings" || view === "bracket") render(); });
     setStatus();
     scheduleLoop();                                 // adaptive continuous refresh (fast when live, idle otherwise)
     setInterval(setStatus, 10000);                  // tick the "updated Xs ago" heartbeat
