@@ -203,6 +203,41 @@
   .pickrow.win .check { opacity:1; }
   .bkt-vs { text-align:center; font-size:10px; letter-spacing:1px; color: var(--muted); margin:1px 0; }
 
+  /* GROUP-STAGE PREDICTION */
+  .gprog { margin-top:16px; font-size:13px; color:#e9e3ff; background:rgba(139,92,246,0.10); border-radius:10px; padding:10px 13px; }
+  .gprog b { color:#c4b5fd; }
+  .gtools { display:flex; gap:8px; margin:10px 0 4px; flex-wrap:wrap; }
+  .gfill { background:#8b5cf6; border:none; color:#fff; padding:9px 14px; border-radius:10px; font-size:12.5px; font-weight:800; cursor:pointer; }
+  .gclear { background:transparent; border:1px solid var(--panel-line); color:var(--muted); padding:9px 14px; border-radius:10px; font-size:12.5px; font-weight:800; cursor:pointer; }
+  .ggrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  .gcard { background:var(--panel); border:1px solid var(--panel-line); border-radius:14px; padding:12px; }
+  .gchdr { font-size:12.5px; font-weight:800; letter-spacing:0.8px; text-transform:uppercase; color:#c4b5fd; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .gdone { font-size:10.5px; color:#2bb673; background:rgba(43,182,115,0.14); padding:2px 7px; border-radius:6px; letter-spacing:0; text-transform:none; }
+  .gsim-table { width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:10px; }
+  .gsim-table td { padding:5px 3px; border-top:1px solid rgba(255,255,255,0.06); color:#eaf4ee; text-align:center; font-variant-numeric:tabular-nums; }
+  .gsim-table td.pos { color:var(--muted); width:16px; font-weight:700; }
+  .gsim-table td.tm { text-align:left; display:flex; align-items:center; gap:6px; }
+  .gsim-table td.tm .badge { width:18px; height:18px; flex:0 0 auto; }
+  .gsim-table td.tm .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gsim-table td.pts { font-weight:900; color:#fff; }
+  .gsim-table tr.adv td.pos { border-left:3px solid #2bb673; color:#2bb673; }
+  .gsim-table tr.third td.pos { border-left:3px solid var(--gold); color:var(--gold-light); }
+  .gmatch { display:flex; align-items:center; gap:7px; padding:6px 0; border-top:1px dashed rgba(255,255,255,0.07); }
+  .gmatch .gt { display:flex; align-items:center; gap:5px; flex:1; min-width:0; font-size:12px; }
+  .gmatch .gt.rt { justify-content:flex-end; text-align:right; }
+  .gmatch .gt .badge { width:18px; height:18px; flex:0 0 auto; border-radius:4px; }
+  .gmatch .gtn { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#dcd6f5; }
+  .gmatch.played .gtn { color:#9fc3b2; }
+  .gsc { font-weight:800; color:#cfe6da; min-width:46px; text-align:center; font-size:13px; }
+  .ginputs { display:flex; align-items:center; gap:3px; flex:0 0 auto; }
+  .gscore { width:30px; text-align:center; background:rgba(255,255,255,0.07); border:1px solid var(--panel-line); color:#fff; border-radius:6px; padding:5px 0; font-size:14px; font-family:inherit; -moz-appearance:textfield; }
+  .gscore:focus { outline:none; border-color:#8b5cf6; }
+  .gscore::-webkit-outer-spin-button, .gscore::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .gdash { color:var(--muted); font-weight:800; }
+  .simgate { margin-top:14px; background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.4); border-radius:12px; padding:14px 16px; color:#e9e3ff; font-size:13.5px; }
+  .simgate b { color:#c4b5fd; }
+  .gobtn, .gogroups { display:inline-block; margin-top:8px; background:#8b5cf6; border:none; color:#fff; padding:8px 14px; border-radius:9px; font-size:12.5px; font-weight:800; cursor:pointer; }
+
   /* ---------- MOBILE ---------- */
   @media (max-width: 560px) {
     .wrap { padding: 10px 10px 48px; }
@@ -230,6 +265,7 @@
     .standgrid { grid-template-columns: 1fr; gap: 10px; }
     table.stand .hide-s { display: none; }
     .scorer .pl { font-size: 14px; }
+    .ggrid { grid-template-columns: 1fr; }
   }
   @media (max-width: 360px) {
     header h1 { font-size: 26px; }
@@ -405,6 +441,8 @@
       _detail: st.shortDetail || st.detail || "",
       _cls: cls,
       _slug: (e.season && e.season.slug) || "",
+      _homeId: (home.team && home.team.id) || "",
+      _awayId: (away.team && away.team.id) || "",
       _search: (teamName(home, parts[1]) + " " + teamName(away, parts[0]) + " " + ((home.team && home.team.abbreviation) || "") + " " + ((away.team && away.team.abbreviation) || "")).toLowerCase(),
       _winHome: !!home.winner,
       _winAway: !!away.winner
@@ -672,11 +710,13 @@
     board.innerHTML = '<div class="schdr">👟 Golden Boot race <span>· goals so far</span></div><div class="scorers">' + rows + "</div>";
   }
 
-  /* ---------- bracket simulator (HYPOTHETICAL — the user picks the winners) ----------
-     Structure taken verbatim from ESPN's knockout events (slots + feeder refs).
-     Seeded from the live group standings (a projection while groups are in play). */
-  var simPicks = {};          // "ROUND:m" -> winning team id
-  var simRound = "R32";
+  /* ---------- bracket simulator (HYPOTHETICAL — you predict the games) ----------
+     Phase 1: predict the remaining GROUP scores -> compute each group's 1st/2nd/3rd
+     + the 8 best thirds. Phase 2: pick KNOCKOUT winners. Wiring = official FIFA
+     match numbers (73-104). */
+  var simPicks = {};           // "ROUND:m" -> winning team id (knockouts)
+  var simScores = {};          // group match id -> { h, a } (predicted group results)
+  var simPhase = "groups";     // groups | R32 | R16 | QF | SF | FINAL
   // FIFA match numbers (73-104) are the canonical bracket wiring — source: official 2026 schedule.
   var ROUNDS = {
     R32: [
@@ -700,40 +740,74 @@
   var ROUND_LABEL = { R32: "Round of 32", R16: "Round of 16", QF: "Quarter-finals", SF: "Semi-finals", FINAL: "Final" };
   var ROUND_SHORT = { R32: "R32", R16: "R16", QF: "QF", SF: "SF", FINAL: "Final" };
 
-  function numVal(s) { var n = parseInt(s, 10); return isNaN(n) ? 0 : n; }
-  function cmpThird(a, b) { return (numVal(b.pts) - numVal(a.pts)) || (numVal(b.gd) - numVal(a.gd)) || (numVal(b.gf) - numVal(a.gf)); }
-  function mkTeam(t, L) { return { id: (t.id || t.name || "") + "", name: t.name, logo: t.logo, group: L, pts: t.pts, gd: t.gd, gf: t.gf }; }
-  var _seedCache = null, _seedKey = "";
-  function seedSlots() {
+  function withGroup(r, L) { return { id: r.id, name: r.name, logo: r.logo, group: L, pts: r.pts, gd: r.gd, gf: r.gf }; }
+
+  // assemble groups: membership from standings, the 6 round-robin matches from events
+  function groupData() {
     if (!STANDINGS || !STANDINGS.length) return null;
-    var sig = STANDINGS.map(function (g) { return g.teams.map(function (t) { return (t.name || "") + t.pts + t.gd; }).join(","); }).join("|");
+    var teamGroup = {}, groups = {};
+    STANDINGS.forEach(function (g) {
+      var mm = (g.group || "").match(/([A-L])\s*$/i); var L = mm ? mm[1].toUpperCase() : null; if (!L) return;
+      groups[L] = { teams: [], matches: [] };
+      g.teams.forEach(function (t) { teamGroup[t.id] = L; groups[L].teams.push({ id: t.id, name: t.name, logo: t.logo }); });
+    });
+    Object.keys(EVENTS).forEach(function (k) {
+      var e = EVENTS[k]; if (e._slug !== "group-stage") return;
+      var L = teamGroup[e._homeId] || teamGroup[e._awayId]; if (!L || !groups[L]) return;
+      var played = e._cls === "finished" && hasScore(e);
+      groups[L].matches.push({
+        id: e.idEvent, homeId: e._homeId, homeName: e.strHomeTeam, homeLogo: e.strHomeTeamBadge,
+        awayId: e._awayId, awayName: e.strAwayTeam, awayLogo: e.strAwayTeamBadge,
+        played: played, rh: played ? parseInt(e.intHomeScore, 10) : null, ra: played ? parseInt(e.intAwayScore, 10) : null, ko: kickoff(e)
+      });
+    });
+    Object.keys(groups).forEach(function (L) { groups[L].matches.sort(function (a, b) { return (a.ko ? a.ko.getTime() : 0) - (b.ko ? b.ko.getTime() : 0); }); });
+    return groups;
+  }
+  function scoreOf(m) {
+    if (m.played) return { h: m.rh, a: m.ra, set: true };
+    var s = simScores[m.id];
+    if (s && s.h != null && s.a != null) return { h: s.h, a: s.a, set: true };
+    return { set: false };
+  }
+  function computeGroup(grp) {
+    var tbl = {};
+    grp.teams.forEach(function (t) { tbl[t.id] = { id: t.id, name: t.name, logo: t.logo, gp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 }; });
+    var setCount = 0;
+    grp.matches.forEach(function (m) {
+      var s = scoreOf(m); if (!s.set) return;
+      var H = tbl[m.homeId], A = tbl[m.awayId]; if (!H || !A) return;
+      setCount++;
+      H.gp++; A.gp++; H.gf += s.h; H.ga += s.a; A.gf += s.a; A.ga += s.h;
+      if (s.h > s.a) { H.w++; A.l++; H.pts += 3; } else if (s.h < s.a) { A.w++; H.l++; A.pts += 3; } else { H.d++; A.d++; H.pts++; A.pts++; }
+    });
+    var rows = grp.teams.map(function (t) { var r = tbl[t.id]; r.gd = r.gf - r.ga; return r; });
+    rows.sort(function (a, b) { return (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name); });
+    return { rows: rows, complete: grp.matches.length >= 6 && setCount >= 6 };
+  }
+  var _seedCache = null, _seedKey = "";
+  function simSeed() {
+    var groups = groupData(); if (!groups) return null;
+    var sig = Object.keys(groups).sort().map(function (L) { return L + groups[L].matches.map(function (m) { var s = scoreOf(m); return m.id + (s.set ? s.h + "-" + s.a : "?"); }).join(","); }).join("|");
     if (_seedCache && _seedKey === sig) return _seedCache;
-    var byGroup = {};
-    STANDINGS.forEach(function (g) { var mm = (g.group || "").match(/([A-L])\s*$/i); var L = mm ? mm[1].toUpperCase() : null; if (L) byGroup[L] = g.teams; });
-    var slots = {};
-    Object.keys(byGroup).forEach(function (L) {
-      var t = byGroup[L];
-      if (t[0]) slots["1" + L] = mkTeam(t[0], L);
-      if (t[1]) slots["2" + L] = mkTeam(t[1], L);
+    var slots = {}, thirds = [], done = 0, total = Object.keys(groups).length, allComplete = true;
+    Object.keys(groups).forEach(function (L) {
+      var cg = computeGroup(groups[L]);
+      if (cg.complete) { done++; slots["1" + L] = withGroup(cg.rows[0], L); slots["2" + L] = withGroup(cg.rows[1], L); thirds.push(withGroup(cg.rows[2], L)); }
+      else allComplete = false;
     });
-    var thirds = [];
-    Object.keys(byGroup).forEach(function (L) { if (byGroup[L][2]) thirds.push(mkTeam(byGroup[L][2], L)); });
-    thirds.sort(cmpThird);
-    var top8 = thirds.slice(0, 8), used = {};
-    THIRD_SLOTS.forEach(function (ts) {
-      for (var i = 0; i < top8.length; i++) { var th = top8[i]; if (used[th.group]) continue; if (ts.pool.indexOf(th.group) !== -1) { slots[ts.k] = th; used[th.group] = 1; break; } }
-    });
-    // fallback so all 8 third-slots fill (projection) even if the pool constraint strands one
-    THIRD_SLOTS.forEach(function (ts) {
-      if (slots[ts.k]) return;
-      for (var i = 0; i < top8.length; i++) { if (!used[top8[i].group]) { slots[ts.k] = top8[i]; used[top8[i].group] = 1; break; } }
-    });
-    _seedCache = slots; _seedKey = sig; return slots;
+    if (allComplete && thirds.length === total) {
+      thirds.sort(function (a, b) { return (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name); });
+      var top8 = thirds.slice(0, 8), used = {};
+      THIRD_SLOTS.forEach(function (ts) { for (var i = 0; i < top8.length; i++) { var th = top8[i]; if (used[th.group]) continue; if (ts.pool.indexOf(th.group) !== -1) { slots[ts.k] = th; used[th.group] = 1; break; } } });
+      THIRD_SLOTS.forEach(function (ts) { if (slots[ts.k]) return; for (var i = 0; i < top8.length; i++) { if (!used[top8[i].group]) { slots[ts.k] = top8[i]; used[top8[i].group] = 1; break; } } });
+    }
+    _seedCache = { slots: slots, allComplete: allComplete, done: done, total: total }; _seedKey = sig; return _seedCache;
   }
   function matchOf(round, m) { var arr = ROUNDS[round] || []; for (var i = 0; i < arr.length; i++) if (arr[i].m === m) return arr[i]; return null; }
   function resolveRef(ref) {
     if (/^(R32|R16|QF|SF):/.test(ref)) { var p = ref.split(":"); return winnerOf(p[0], parseInt(p[1], 10)); }
-    var s = seedSlots(); return s ? (s[ref] || null) : null;
+    var s = simSeed(); return s ? (s.slots[ref] || null) : null;
   }
   function winnerOf(round, m) {
     var mo = matchOf(round, m); if (!mo) return null;
@@ -741,11 +815,11 @@
     var ta = resolveRef(mo.a), tb = resolveRef(mo.b);
     if (ta && ta.id === pickId) return ta;
     if (tb && tb.id === pickId) return tb;
-    return null;   // feeder changed under this pick → auto-cleared
+    return null;
   }
   function refLabel(ref) {
     if (/^(R32|R16|QF|SF):/.test(ref)) return "Winner of Match " + ref.split(":")[1];
-    if (/^T\d+$/.test(ref)) return "3rd place (projected)";
+    if (/^T\d+$/.test(ref)) return "Best 3rd place";
     if (/^1[A-L]$/.test(ref)) return "Winner Group " + ref[1];
     if (/^2[A-L]$/.test(ref)) return "Runner-up Group " + ref[1];
     return "TBD";
@@ -762,21 +836,74 @@
     }
     return '<div class="bkt-match">' + rowHTML(ta, mo.a) + '<div class="bkt-vs">v</div>' + rowHTML(tb, mo.b) + "</div>";
   }
+
+  /* ---- group-stage prediction UI ---- */
+  function groupTableHTML(cg) {
+    return '<table class="gsim-table"><tbody>' + cg.rows.map(function (r, i) {
+      var tag = i < 2 ? "adv" : i === 2 ? "third" : "";
+      return '<tr class="' + tag + '"><td class="pos">' + (i + 1) + '</td><td class="tm">' + badge(r.logo, r.name) + '<span class="nm">' + esc(r.name) + "</span></td><td>" + r.gp + "</td><td>" + (r.gd > 0 ? "+" : "") + r.gd + '</td><td class="pts">' + r.pts + "</td></tr>";
+    }).join("") + "</tbody></table>";
+  }
+  function renderGroupsSim() {
+    var groups = groupData(), keys = Object.keys(groups).sort(), seed = simSeed();
+    var prog = '<div class="gprog">' + (seed.allComplete ? '✅ All groups decided — open <b>R32</b> to play out your bracket.' : '📋 <b>' + seed.done + " / " + seed.total + '</b> groups decided · predict the remaining scores below') + "</div>";
+    var tools = '<div class="gtools"><button class="gfill" id="gfill">⚡ Auto-fill rest</button><button class="gclear" id="gclear">Clear my scores</button></div>';
+    var cards = keys.map(function (L) {
+      var grp = groups[L], cg = computeGroup(grp);
+      var matches = grp.matches.map(function (m) {
+        if (m.played) return '<div class="gmatch played"><span class="gt">' + badge(m.homeLogo, m.homeName) + '<span class="gtn">' + esc(m.homeName) + '</span></span><span class="gsc">' + m.rh + " – " + m.ra + '</span><span class="gt rt"><span class="gtn">' + esc(m.awayName) + "</span>" + badge(m.awayLogo, m.awayName) + '</span></div>';
+        var sv = simScores[m.id] || {};
+        return '<div class="gmatch"><span class="gt">' + badge(m.homeLogo, m.homeName) + '<span class="gtn">' + esc(m.homeName) + '</span></span>' +
+          '<span class="ginputs"><input class="gscore" type="number" min="0" max="29" inputmode="numeric" data-mid="' + esc(m.id) + '" data-side="h" value="' + (sv.h != null ? sv.h : "") + '"><span class="gdash">–</span><input class="gscore" type="number" min="0" max="29" inputmode="numeric" data-mid="' + esc(m.id) + '" data-side="a" value="' + (sv.a != null ? sv.a : "") + '"></span>' +
+          '<span class="gt rt"><span class="gtn">' + esc(m.awayName) + "</span>" + badge(m.awayLogo, m.awayName) + "</span></div>";
+      }).join("");
+      return '<div class="gcard" data-group="' + L + '"><div class="gchdr">Group ' + L + (cg.complete ? ' <span class="gdone">✓ decided</span>' : "") + '</div><div class="gtwrap">' + groupTableHTML(cg) + '</div><div class="gmatches">' + matches + "</div></div>";
+    }).join("");
+    return prog + tools + '<div class="ggrid">' + cards + "</div>";
+  }
+  function updateGroupCard(L) {
+    var groups = groupData(); if (!groups || !groups[L]) return;
+    var cg = computeGroup(groups[L]);
+    var card = document.querySelector('.gcard[data-group="' + L + '"]'); if (!card) return;
+    var tw = card.querySelector(".gtwrap"); if (tw) tw.innerHTML = groupTableHTML(cg);
+    var hdr = card.querySelector(".gchdr"); if (hdr) hdr.innerHTML = "Group " + L + (cg.complete ? ' <span class="gdone">✓ decided</span>' : "");
+  }
+  function updateGroupProgress() {
+    var seed = simSeed(), el = document.querySelector(".gprog"); if (!el || !seed) return;
+    el.innerHTML = seed.allComplete ? '✅ All groups decided — open <b>R32</b> to play out your bracket.' : '📋 <b>' + seed.done + " / " + seed.total + '</b> groups decided · predict the remaining scores below';
+  }
+  function autofillGroups() {
+    var groups = groupData(); if (!groups) return;
+    var rank = {}; if (STANDINGS) STANDINGS.forEach(function (g) { g.teams.forEach(function (t) { rank[t.id] = t.rank || 99; }); });
+    Object.keys(groups).forEach(function (L) {
+      groups[L].matches.forEach(function (m) {
+        if (m.played) return;
+        simScores[m.id] = ((rank[m.awayId] || 99) < (rank[m.homeId] || 99)) ? { h: 0, a: 1 } : { h: 1, a: 0 };  // better-placed team wins 1-0
+      });
+    });
+  }
+
   function renderBracket(board) {
-    var banner = '<div class="simbanner"><span class="big">🔮 SIMULATION — your what-if bracket</span>' +
-      "<small>These are <b>your own predictions</b>, not real results. Tap a team to send it through and the next round fills in, so you can see who each team <b>could</b> face. Seeding is <b>projected</b> from the current group standings while the group stage is still being played.</small></div>";
-    if (!seedSlots()) { board.innerHTML = banner + '<div class="state"><div class="big">📊</div><h3>Loading the seeding…</h3><p>The bracket seeds from the live group standings.</p></div>'; return; }
-    var champ = winnerOf("FINAL", ROUNDS.FINAL[0].m);
-    var champHTML = champ ? '<div class="simchamp"><div class="lab">🔮 Your predicted champion</div><div class="who">' + badge(champ.logo, champ.name) + esc(champ.name) + "</div></div>" : "";
-    var rounds = ["R32", "R16", "QF", "SF", "FINAL"];
-    var subnav = '<div class="simtools"><div class="subnav">' + rounds.map(function (r) {
-      return '<button class="sb' + (r === simRound ? " active" : "") + '" data-round="' + r + '">' + ROUND_SHORT[r] + "</button>";
-    }).join("") + '</div><button class="simreset" id="simreset">↺ Reset</button></div>';
-    var arr = ROUNDS[simRound] || [];
-    var matchesHTML = arr.map(function (mo) { return bracketMatch(simRound, mo); }).join("");
-    board.innerHTML = banner + champHTML + subnav + '<div class="bkt-round-title">' + ROUND_LABEL[simRound] + "</div>" + matchesHTML;
-    var rb = document.getElementById("simreset"); if (rb) rb.onclick = function () { simPicks = {}; render(); };
-    Array.prototype.forEach.call(board.querySelectorAll(".subnav .sb"), function (b) { b.onclick = function () { simRound = b.getAttribute("data-round"); render(); }; });
+    var seed = simSeed();
+    var banner = '<div class="simbanner"><span class="big">🔮 SIMULATION — your what-if World Cup</span>' +
+      "<small>Predict the <b>remaining group games</b> (scores and all) — the bracket then builds itself from who you have finishing 1st / 2nd / 3rd. These are <b>your predictions</b>, not real results.</small></div>";
+    if (!seed) { board.innerHTML = banner + '<div class="state"><div class="big">📊</div><h3>Loading the groups…</h3></div>'; return; }
+    var phases = [["groups", "Groups"], ["R32", "R32"], ["R16", "R16"], ["QF", "QF"], ["SF", "SF"], ["FINAL", "Final"]];
+    var subnav = '<div class="simtools"><div class="subnav">' + phases.map(function (p) { return '<button class="sb' + (p[0] === simPhase ? " active" : "") + '" data-phase="' + p[0] + '">' + p[1] + "</button>"; }).join("") + '</div><button class="simreset" id="simreset">↺ Reset</button></div>';
+
+    if (simPhase === "groups") {
+      board.innerHTML = banner + subnav + renderGroupsSim();
+    } else {
+      var head;
+      if (!seed.allComplete) head = '<div class="simgate">🔒 Predict the group stage first to unlock the bracket — <b>' + seed.done + " / " + seed.total + '</b> groups decided. <button class="gobtn" id="gogroups">Go to Groups →</button></div>';
+      else { var champ = winnerOf("FINAL", ROUNDS.FINAL[0].m); head = champ ? '<div class="simchamp"><div class="lab">🔮 Your predicted champion</div><div class="who">' + badge(champ.logo, champ.name) + esc(champ.name) + "</div></div>" : ""; }
+      board.innerHTML = banner + subnav + head + '<div class="bkt-round-title">' + ROUND_LABEL[simPhase] + "</div>" + (ROUNDS[simPhase] || []).map(function (mo) { return bracketMatch(simPhase, mo); }).join("");
+    }
+    var rb = document.getElementById("simreset"); if (rb) rb.onclick = function () { simPicks = {}; simScores = {}; render(); };
+    Array.prototype.forEach.call(board.querySelectorAll(".subnav .sb"), function (b) { b.onclick = function () { simPhase = b.getAttribute("data-phase"); render(); }; });
+    var gg = document.getElementById("gogroups"); if (gg) gg.onclick = function () { simPhase = "groups"; render(); };
+    var gf = document.getElementById("gfill"); if (gf) gf.onclick = function () { autofillGroups(); render(); };
+    var gc = document.getElementById("gclear"); if (gc) gc.onclick = function () { simScores = {}; render(); };
   }
 
   /* ---------- match detail (expanded on tap): goal + card timeline ---------- */
@@ -971,6 +1098,18 @@
       var key = round + ":" + m;
       if (simPicks[key] === tid) delete simPicks[key]; else simPicks[key] = tid;
       render();
+    });
+    // group-stage predictions — update the affected group's table in place (keeps focus + scroll)
+    document.getElementById("board").addEventListener("change", function (e) {
+      var inp = e.target;
+      if (!inp || !inp.classList || !inp.classList.contains("gscore")) return;
+      var mid = inp.getAttribute("data-mid"), side = inp.getAttribute("data-side"), val = (inp.value || "").trim();
+      if (!simScores[mid]) simScores[mid] = {};
+      if (val === "") delete simScores[mid][side]; else { var v = Math.max(0, Math.min(29, parseInt(val, 10) || 0)); simScores[mid][side] = v; inp.value = v; }
+      if (simScores[mid].h == null && simScores[mid].a == null) delete simScores[mid];
+      var card = inp.closest ? inp.closest(".gcard") : null;
+      if (card) updateGroupCard(card.getAttribute("data-group"));
+      updateGroupProgress();
     });
     // team search — type a country to see all its games, played and upcoming
     (function () {
