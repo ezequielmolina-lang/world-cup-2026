@@ -161,6 +161,17 @@
   .dmeta { margin-top:12px; display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color: var(--muted); }
   .dnote { font-size:13px; color: var(--muted); font-style:italic; }
 
+  /* TEAM SEARCH */
+  .searchwrap { position:relative; margin-top:14px; display:none; }
+  .searchinput { width:100%; background: var(--panel); border:1px solid var(--panel-line); border-radius:12px; padding:12px 38px 12px 40px; color:#eaf4ee; font-size:16px; font-family:inherit; }
+  .searchinput:focus { outline:none; border-color: rgba(226,165,43,0.6); background: rgba(255,255,255,0.06); }
+  .searchinput::placeholder { color: var(--muted); }
+  .searchicon { position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:15px; opacity:0.85; pointer-events:none; }
+  .searchclear { position:absolute; right:7px; top:50%; transform:translateY(-50%); background:transparent; border:none; color: var(--muted); font-size:15px; cursor:pointer; padding:7px 9px; display:none; border-radius:8px; }
+  .searchclear:hover { color:#fff; }
+  .searchwrap.has-text .searchclear { display:block; }
+  .searchresult { margin:18px 2px 4px; font-size:13px; font-weight:800; letter-spacing:0.3px; color: var(--gold-light); }
+
   /* ---------- MOBILE ---------- */
   @media (max-width: 560px) {
     .wrap { padding: 10px 10px 48px; }
@@ -214,6 +225,15 @@
   </header>
 
   <div class="topnav" id="topnav"></div>
+
+  <div class="searchwrap" id="searchwrap">
+    <span class="searchicon">🔍</span>
+    <input id="search" class="searchinput" type="text" list="teamlist" autocomplete="off"
+           placeholder="See one team's games — e.g. Argentina, Colombia…">
+    <button id="searchclear" class="searchclear" aria-label="Clear search">✕</button>
+    <datalist id="teamlist"></datalist>
+  </div>
+
   <div class="chips" id="chips"></div>
 
   <div id="board">
@@ -264,6 +284,7 @@
   var STANDINGS_URL = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
   var expanded = {};          // idEvent -> true (match cards expanded to show the timeline)
   var lastUpdated = 0;        // ms timestamp of last successful refresh (powers "updated Xs ago")
+  var searchQuery = "";       // team filter text (matches view)
 
   var TZ = "";
   try { TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) {}
@@ -353,6 +374,7 @@
       _detail: st.shortDetail || st.detail || "",
       _cls: cls,
       _slug: (e.season && e.season.slug) || "",
+      _search: (teamName(home, parts[1]) + " " + teamName(away, parts[0]) + " " + ((home.team && home.team.abbreviation) || "") + " " + ((away.team && away.team.abbreviation) || "")).toLowerCase(),
       _winHome: !!home.winner,
       _winAway: !!away.winner
     };
@@ -639,25 +661,71 @@
     return '<div class="m-detail">' + body + meta + "</div>";
   }
 
+  /* ---------- grouping + team-list helpers ---------- */
+  function groupedHTML(items) {
+    var groups = [], idx = {};
+    items.forEach(function (e) {
+      var ko = kickoff(e), key = ko ? localDateKey(ko) : "tbd";
+      if (!(key in idx)) { idx[key] = groups.length; groups.push({ key: key, items: [] }); }
+      groups[idx[key]].items.push(e);
+    });
+    return groups.map(function (g) {
+      var hdr;
+      if (g.key === "tbd") hdr = '<div class="dayhdr">Date TBD</div>';
+      else { var f = fmtDayHeader(g.key); hdr = '<div class="dayhdr">' + f.main + (f.rel ? ' <span class="rel">· ' + f.rel + "</span>" : "") + "</div>"; }
+      return '<div class="daygroup">' + hdr + g.items.map(matchCard).join("") + "</div>";
+    }).join("");
+  }
+  function populateTeamList(list) {
+    var dl = document.getElementById("teamlist"); if (!dl) return;
+    var seen = {}, names = [];
+    list.forEach(function (e) {
+      [e.strHomeTeam, e.strAwayTeam].forEach(function (n) {
+        if (!n || /winner|runner|loser|tbd|3rd|place|^\d[a-l]$/i.test(n)) return;   // skip knockout placeholders
+        var key = n.toLowerCase(); if (!seen[key]) { seen[key] = 1; names.push(n); }
+      });
+    });
+    if (dl.getAttribute("data-n") === String(names.length)) return;   // unchanged
+    dl.setAttribute("data-n", String(names.length));
+    dl.innerHTML = names.sort().map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join("");
+  }
+
   /* ---------- main render ---------- */
   function render() {
     renderTopNav();
     var board = document.getElementById("board");
     var chipsEl = document.getElementById("chips");
-    if (view === "standings") { chipsEl.style.display = "none"; renderStandings(board); return; }
-    if (view === "scorers") { chipsEl.style.display = "none"; renderScorers(board); return; }
-    chipsEl.style.display = "";   // matches view
+    var searchWrap = document.getElementById("searchwrap");
+    if (view === "standings") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderStandings(board); return; }
+    if (view === "scorers") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderScorers(board); return; }
+    if (searchWrap) searchWrap.style.display = "block";   // matches view
 
     var list = Object.keys(EVENTS).map(function (k) { return EVENTS[k]; });
     list.sort(function (a, b) { var ta = kickoff(a), tb = kickoff(b); return (ta ? ta.getTime() : 0) - (tb ? tb.getTime() : 0); });
     var c = counts(list);
     if (!activeChip && list.length) activeChip = c.live ? "live" : (c.today ? "today" : (c.upcoming ? "upcoming" : "results"));
-    renderChips(c);
 
-    if (!list.length) { if (firstPaintDone) board.innerHTML = emptyState(); return; }
+    if (!list.length) { chipsEl.style.display = ""; renderChips(c); if (firstPaintDone) board.innerHTML = emptyState(); return; }
     firstPaintDone = true;
+    populateTeamList(list);
 
     var tznote = '<div class="tznote">🕑 Kickoffs shown in <strong>your</strong> local time' + (TZ ? " · " + esc(TZ.replace(/_/g, " ")) : "") + "</div>";
+
+    // TEAM SEARCH — overrides the chip filter; shows every game (played + upcoming) for the team
+    if (searchQuery) {
+      chipsEl.style.display = "none";
+      var q = searchQuery.toLowerCase();
+      var matched = list.filter(function (e) { return e._search && e._search.indexOf(q) !== -1; });
+      if (!matched.length) {
+        board.innerHTML = '<div class="state"><div class="big">🔍</div><h3>No team matches “' + esc(searchQuery) + '”</h3><p>Try a country name — e.g. Argentina, Colombia, Brazil.</p></div>';
+        return;
+      }
+      board.innerHTML = '<div class="searchresult">⚽ ' + matched.length + ' game' + (matched.length > 1 ? "s" : "") + " · “" + esc(searchQuery) + "”</div>" + tznote + groupedHTML(matched);
+      return;
+    }
+
+    chipsEl.style.display = "";
+    renderChips(c);
     var todayKey = localDateKey(new Date());
     var filtered = list.filter(function (e) {
       switch (activeChip) {
@@ -670,19 +738,7 @@
     });
     if (activeChip === "results") filtered.reverse();
     if (!filtered.length) { board.innerHTML = tznote + emptyTab(); return; }
-
-    var groups = [], idx = {};
-    filtered.forEach(function (e) {
-      var ko = kickoff(e), key = ko ? localDateKey(ko) : "tbd";
-      if (!(key in idx)) { idx[key] = groups.length; groups.push({ key: key, items: [] }); }
-      groups[idx[key]].items.push(e);
-    });
-    board.innerHTML = tznote + groups.map(function (g) {
-      var hdr;
-      if (g.key === "tbd") hdr = '<div class="dayhdr">Date TBD</div>';
-      else { var f = fmtDayHeader(g.key); hdr = '<div class="dayhdr">' + f.main + (f.rel ? ' <span class="rel">· ' + f.rel + "</span>" : "") + "</div>"; }
-      return '<div class="daygroup">' + hdr + g.items.map(matchCard).join("") + "</div>";
-    }).join("");
+    board.innerHTML = tznote + groupedHTML(filtered);
   }
 
   function emptyState() {
@@ -766,6 +822,14 @@
       card.classList.toggle("expanded", !!expanded[id]);
       var mt = card.querySelector(".moretxt"); if (mt) mt.textContent = expanded[id] ? "Hide details" : "Match info";
     });
+    // team search — type a country to see all its games, played and upcoming
+    (function () {
+      var inp = document.getElementById("search"), clr = document.getElementById("searchclear"), wrap = document.getElementById("searchwrap");
+      function apply() { searchQuery = (inp.value || "").trim(); wrap.classList.toggle("has-text", !!searchQuery); render(); }
+      inp.addEventListener("input", apply);
+      inp.addEventListener("search", apply);
+      clr.addEventListener("click", function () { inp.value = ""; searchQuery = ""; wrap.classList.remove("has-text"); inp.focus(); render(); });
+    })();
     fetchAll(false).then(function () { firstPaintDone = true; lastUpdated = Date.now(); render(); setStatus(); });
     fetchStandings().then(function () { if (view === "standings") render(); });
     setStatus();
