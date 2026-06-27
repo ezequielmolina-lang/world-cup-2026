@@ -1,0 +1,15 @@
+{
+  "name": "Work vs World Cup — 2026",
+  "short_name": "World Cup 26",
+  "description": "Every 2026 World Cup match, the standings, top scorers and a what-if bracket — live, in your own timezone.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#04241a",
+  "theme_color": "#06301f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
