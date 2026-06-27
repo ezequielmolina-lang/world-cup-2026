@@ -236,7 +236,19 @@
   .gdash { color:var(--muted); font-weight:800; }
   .simgate { margin-top:14px; background:rgba(139,92,246,0.12); border:1px solid rgba(139,92,246,0.4); border-radius:12px; padding:14px 16px; color:#e9e3ff; font-size:13.5px; }
   .simgate b { color:#c4b5fd; }
+  .siminfo { margin-top:14px; background:rgba(139,92,246,0.08); border-radius:10px; padding:10px 13px; color:#c3b8e8; font-size:12.5px; }
   .gobtn, .gogroups { display:inline-block; margin-top:8px; background:#8b5cf6; border:none; color:#fff; padding:8px 14px; border-radius:9px; font-size:12.5px; font-weight:800; cursor:pointer; }
+
+  /* REAL vs SIMULATE toggle + real-bracket banner */
+  .bktmode { display:flex; gap:6px; margin-top:16px; background:var(--panel); border:1px solid var(--panel-line); border-radius:12px; padding:5px; }
+  .bktmode .bm { flex:1; text-align:center; background:transparent; border:none; color:#cfe6da; padding:11px 8px; border-radius:9px; font-size:14px; font-weight:800; cursor:pointer; }
+  .bktmode .bm.active[data-mode="real"] { background:var(--gold); color:var(--navy); }
+  .bktmode .bm.active[data-mode="sim"] { background:#8b5cf6; color:#fff; }
+  .realbanner { margin-top:14px; border:1px solid rgba(226,165,43,0.5); background:rgba(14,107,73,0.28); border-radius:14px; padding:14px 16px; color:#eaf4ee; }
+  .realbanner .big { font-size:14.5px; font-weight:900; color:var(--gold-light); display:block; margin-bottom:4px; }
+  .realbanner small { color:#cfe6da; font-size:12.5px; line-height:1.5; display:block; }
+  .realbanner b { color:var(--gold-light); }
+  .subnav.real .sb.active { background:var(--gold); border-color:var(--gold); color:var(--navy); }
 
   /* ---------- MOBILE ---------- */
   @media (max-width: 560px) {
@@ -612,7 +624,7 @@
   /* ---------- top nav (Matches / Standings / Scorers) ---------- */
   function renderTopNav() {
     var el = document.getElementById("topnav");
-    var defs = [{ id: "matches", label: "⚽ Matches" }, { id: "standings", label: "📊 Standings" }, { id: "scorers", label: "👟 Scorers" }, { id: "bracket", label: "🔮 Bracket" }];
+    var defs = [{ id: "matches", label: "⚽ Matches" }, { id: "standings", label: "📊 Standings" }, { id: "scorers", label: "👟 Scorers" }, { id: "bracket", label: "🏆 Bracket" }];
     el.innerHTML = defs.map(function (d) {
       return '<button class="tab' + (d.id === view ? " active" : "") + '" data-v="' + d.id + '">' + d.label + "</button>";
     }).join("");
@@ -717,6 +729,8 @@
   var simPicks = {};           // "ROUND:m" -> winning team id (knockouts)
   var simScores = {};          // group match id -> { h, a } (predicted group results)
   var simPhase = "groups";     // groups | R32 | R16 | QF | SF | FINAL
+  var bktMode = "real";        // real | sim — Bracket tab: the actual draw vs your what-if
+  var realRound = "R32";       // round shown in the real bracket
   // FIFA match numbers (73-104) are the canonical bracket wiring — source: official 2026 schedule.
   var ROUNDS = {
     R32: [
@@ -785,10 +799,38 @@
     rows.sort(function (a, b) { return (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || a.name.localeCompare(b.name); });
     return { rows: rows, complete: grp.matches.length >= 6 && setCount >= 6 };
   }
+  // REAL Round-of-32 seeding from ESPN's actual knockout events (authoritative once groups finish).
+  // ESPN's match numbering ≠ FIFA's, so we map each real R32 event to a ROUNDS match via its
+  // group-winner/runner-up slot (every R32 match has at least one 1X/2X slot).
+  function groupLetter(name) { var m = (name || "").match(/([A-L])\s*$/i); return m ? m[1].toUpperCase() : null; }
+  function realPositions() {
+    var pos = {}; if (!STANDINGS) return pos;
+    STANDINGS.forEach(function (g) { var L = groupLetter(g.group); if (!L) return; g.teams.forEach(function (t, i) { pos[t.id] = (i + 1) + L; }); });
+    return pos;
+  }
+  function realR32Seed() {
+    var pos = realPositions(), s2m = {}, slotTeam = {};
+    ROUNDS.R32.forEach(function (mo) { if (/^[12][A-L]$/.test(mo.a)) s2m[mo.a] = mo; if (/^[12][A-L]$/.test(mo.b)) s2m[mo.b] = mo; });
+    function mk(t, posCode) { return { id: (t.id || t.name) + "", name: t.name, logo: t.logo, group: posCode ? posCode.slice(-1) : null }; }
+    Object.keys(EVENTS).forEach(function (k) {
+      var e = EVENTS[k]; if (e._slug !== "round-of-32" || !e._homeId || !e._awayId) return;
+      var ht = { id: e._homeId, name: e.strHomeTeam, logo: e.strHomeTeamBadge }, at = { id: e._awayId, name: e.strAwayTeam, logo: e.strAwayTeamBadge };
+      var hp = pos[e._homeId], ap = pos[e._awayId];
+      var idSlot, mo, idTeam, otherTeam;
+      if (hp && s2m[hp]) { idSlot = hp; mo = s2m[hp]; idTeam = ht; otherTeam = at; }
+      else if (ap && s2m[ap]) { idSlot = ap; mo = s2m[ap]; idTeam = at; otherTeam = ht; }
+      else return;
+      var otherSlot = mo.a === idSlot ? mo.b : mo.a;
+      slotTeam[idSlot] = mk(idTeam, idSlot);
+      slotTeam[otherSlot] = mk(otherTeam, pos[otherTeam.id]);
+    });
+    return slotTeam;
+  }
   var _seedCache = null, _seedKey = "";
   function simSeed() {
     var groups = groupData(); if (!groups) return null;
-    var sig = Object.keys(groups).sort().map(function (L) { return L + groups[L].matches.map(function (m) { var s = scoreOf(m); return m.id + (s.set ? s.h + "-" + s.a : "?"); }).join(","); }).join("|");
+    var real = realR32Seed();
+    var sig = Object.keys(groups).sort().map(function (L) { return L + groups[L].matches.map(function (m) { var s = scoreOf(m); return m.id + (s.set ? s.h + "-" + s.a : "?"); }).join(","); }).join("|") + "#" + Object.keys(real).sort().map(function (s) { return s + real[s].id; }).join(",");
     if (_seedCache && _seedKey === sig) return _seedCache;
     var slots = {}, thirds = [], done = 0, total = Object.keys(groups).length, allComplete = true;
     Object.keys(groups).forEach(function (L) {
@@ -802,7 +844,10 @@
       THIRD_SLOTS.forEach(function (ts) { for (var i = 0; i < top8.length; i++) { var th = top8[i]; if (used[th.group]) continue; if (ts.pool.indexOf(th.group) !== -1) { slots[ts.k] = th; used[th.group] = 1; break; } } });
       THIRD_SLOTS.forEach(function (ts) { if (slots[ts.k]) return; for (var i = 0; i < top8.length; i++) { if (!used[top8[i].group]) { slots[ts.k] = top8[i]; used[top8[i].group] = 1; break; } } });
     }
-    _seedCache = { slots: slots, allComplete: allComplete, done: done, total: total }; _seedKey = sig; return _seedCache;
+    Object.keys(real).forEach(function (s) { slots[s] = real[s]; });   // reality wins once the real draw is set
+    var r32refs = {}; ROUNDS.R32.forEach(function (mo) { r32refs[mo.a] = 1; r32refs[mo.b] = 1; });
+    var ready = Object.keys(r32refs).every(function (s) { return !!slots[s]; });   // bracket playable once every R32 slot is filled
+    _seedCache = { slots: slots, allComplete: allComplete, ready: ready, done: done, total: total }; _seedKey = sig; return _seedCache;
   }
   function matchOf(round, m) { var arr = ROUNDS[round] || []; for (var i = 0; i < arr.length; i++) if (arr[i].m === m) return arr[i]; return null; }
   function resolveRef(ref) {
@@ -883,6 +928,22 @@
     });
   }
 
+  function modeToggleHTML() {
+    return '<div class="bktmode"><button class="bm' + (bktMode === "real" ? " active" : "") + '" data-mode="real">🏆 Real bracket</button><button class="bm' + (bktMode === "sim" ? " active" : "") + '" data-mode="sim">🔮 Simulate</button></div>';
+  }
+  function wireMode(board) { Array.prototype.forEach.call(board.querySelectorAll(".bm"), function (b) { b.onclick = function () { bktMode = b.getAttribute("data-mode"); render(); }; }); }
+  var REAL_SLUG = { R32: "round-of-32", R16: "round-of-16", QF: "quarterfinals", SF: "semifinals", FINAL: "final" };
+  function renderRealBracket(board) {
+    var banner = '<div class="realbanner"><span class="big">🏆 The real bracket</span><small>The actual knockout draw and results, live from the tournament. Tap a match for its goal timeline. To play your own what-if, switch to <b>Simulate</b>.</small></div>';
+    var rounds = [["R32", "R32"], ["R16", "R16"], ["QF", "QF"], ["SF", "SF"], ["FINAL", "Final"]];
+    var subnav = '<div class="simtools"><div class="subnav real">' + rounds.map(function (r) { return '<button class="sb' + (r[0] === realRound ? " active" : "") + '" data-realround="' + r[0] + '">' + r[1] + "</button>"; }).join("") + "</div></div>";
+    var slug = REAL_SLUG[realRound];
+    var ms = Object.keys(EVENTS).map(function (k) { return EVENTS[k]; }).filter(function (e) { return e._slug === slug; }).sort(function (a, b) { var ta = kickoff(a), tb = kickoff(b); return (ta ? ta.getTime() : 0) - (tb ? tb.getTime() : 0); });
+    var body = ms.length ? groupedHTML(ms) : '<div class="state"><div class="big">⏳</div><h3>' + ROUND_LABEL[realRound] + ' isn\'t set yet</h3><p>Teams land here as the previous round finishes.</p></div>';
+    board.innerHTML = modeToggleHTML() + banner + subnav + '<div class="bkt-round-title">' + ROUND_LABEL[realRound] + "</div>" + body;
+    wireMode(board);
+    Array.prototype.forEach.call(board.querySelectorAll(".subnav.real .sb"), function (b) { b.onclick = function () { realRound = b.getAttribute("data-realround"); render(); }; });
+  }
   function renderBracket(board) {
     var seed = simSeed();
     var banner = '<div class="simbanner"><span class="big">🔮 SIMULATION — your what-if World Cup</span>' +
@@ -892,13 +953,21 @@
     var subnav = '<div class="simtools"><div class="subnav">' + phases.map(function (p) { return '<button class="sb' + (p[0] === simPhase ? " active" : "") + '" data-phase="' + p[0] + '">' + p[1] + "</button>"; }).join("") + '</div><button class="simreset" id="simreset">↺ Reset</button></div>';
 
     if (simPhase === "groups") {
-      board.innerHTML = banner + subnav + renderGroupsSim();
+      board.innerHTML = modeToggleHTML() + banner + subnav + renderGroupsSim();
     } else {
-      var head;
-      if (!seed.allComplete) head = '<div class="simgate">🔒 Predict the group stage first to unlock the bracket — <b>' + seed.done + " / " + seed.total + '</b> groups decided. <button class="gobtn" id="gogroups">Go to Groups →</button></div>';
-      else { var champ = winnerOf("FINAL", ROUNDS.FINAL[0].m); head = champ ? '<div class="simchamp"><div class="lab">🔮 Your predicted champion</div><div class="who">' + badge(champ.logo, champ.name) + esc(champ.name) + "</div></div>" : ""; }
-      board.innerHTML = banner + subnav + head + '<div class="bkt-round-title">' + ROUND_LABEL[simPhase] + "</div>" + (ROUNDS[simPhase] || []).map(function (mo) { return bracketMatch(simPhase, mo); }).join("");
+      var r32refs = []; ROUNDS.R32.forEach(function (mo) { r32refs.push(mo.a, mo.b); });
+      var anyFilled = r32refs.some(function (s) { return !!seed.slots[s]; });
+      var head = "", body = "";
+      if (!anyFilled) {
+        head = '<div class="simgate">🔒 Predict the group stage first to unlock the bracket — <b>' + seed.done + " / " + seed.total + '</b> groups decided. <button class="gobtn" id="gogroups">Go to Groups →</button></div>';
+      } else {
+        if (!seed.ready) head = '<div class="siminfo">ℹ️ A couple of spots fill in as the last group games wrap up — pick the rest now.</div>';
+        else { var champ = winnerOf("FINAL", ROUNDS.FINAL[0].m); if (champ) head = '<div class="simchamp"><div class="lab">🔮 Your predicted champion</div><div class="who">' + badge(champ.logo, champ.name) + esc(champ.name) + "</div></div>"; }
+        body = '<div class="bkt-round-title">' + ROUND_LABEL[simPhase] + "</div>" + (ROUNDS[simPhase] || []).map(function (mo) { return bracketMatch(simPhase, mo); }).join("");
+      }
+      board.innerHTML = modeToggleHTML() + banner + subnav + head + body;
     }
+    wireMode(board);
     var rb = document.getElementById("simreset"); if (rb) rb.onclick = function () { simPicks = {}; simScores = {}; render(); };
     Array.prototype.forEach.call(board.querySelectorAll(".subnav .sb"), function (b) { b.onclick = function () { simPhase = b.getAttribute("data-phase"); render(); }; });
     var gg = document.getElementById("gogroups"); if (gg) gg.onclick = function () { simPhase = "groups"; render(); };
@@ -964,7 +1033,7 @@
     var searchWrap = document.getElementById("searchwrap");
     if (view === "standings") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderStandings(board); return; }
     if (view === "scorers") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderScorers(board); return; }
-    if (view === "bracket") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; renderBracket(board); return; }
+    if (view === "bracket") { chipsEl.style.display = "none"; if (searchWrap) searchWrap.style.display = "none"; (bktMode === "real" ? renderRealBracket : renderBracket)(board); return; }
     if (searchWrap) searchWrap.style.display = "block";   // matches view
 
     var list = Object.keys(EVENTS).map(function (k) { return EVENTS[k]; });
