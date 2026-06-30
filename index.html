@@ -92,6 +92,8 @@
   .team.win .name { font-weight:800; }
   .team.lose .name, .team.lose .score { color: #a9c6b8; }
   .m-venue { margin-top:9px; font-size:12.5px; color: var(--muted); display:flex; align-items:center; gap:6px; }
+  .team .score .pk { font-size:12px; font-weight:800; color: var(--gold-light); margin-left:4px; vertical-align:1px; }
+  .m-pens { margin-top:9px; font-size:13px; font-weight:700; color: var(--gold-light); }
 
   /* STATES */
   .state { text-align:center; padding:48px 20px; color: var(--muted); }
@@ -466,6 +468,8 @@
       _homeId: (home.team && home.team.id) || "",
       _awayId: (away.team && away.team.id) || "",
       _search: (teamName(home, parts[1]) + " " + teamName(away, parts[0]) + " " + ((home.team && home.team.abbreviation) || "") + " " + ((away.team && away.team.abbreviation) || "")).toLowerCase(),
+      _penHome: (home.shootoutScore != null && home.shootoutScore !== "") ? home.shootoutScore : null,
+      _penAway: (away.shootoutScore != null && away.shootoutScore !== "") ? away.shootoutScore : null,
       _winHome: !!home.winner,
       _winAway: !!away.winner
     };
@@ -573,25 +577,31 @@
   }
   function matchCard(ev) {
     var show = (ev._cls === "live" || ev._cls === "finished") && hasScore(ev);
+    var hasPens = ev._penHome != null && ev._penAway != null;
     var hWin = "", aWin = "";
     if (show) {
       if (ev._cls === "finished" && (ev._winHome || ev._winAway)) { hWin = ev._winHome ? "win" : "lose"; aWin = ev._winAway ? "win" : "lose"; }
       else { var h = parseInt(ev.intHomeScore, 10), a = parseInt(ev.intAwayScore, 10); if (h > a) { hWin = "win"; aWin = "lose"; } else if (a > h) { aWin = "win"; hWin = "lose"; } }
     }
-    function row(name, badgeUrl, score, win) {
-      return '<div class="team ' + win + '">' + badge(badgeUrl, name) +
-        '<span class="name">' + esc(name || "TBD") + "</span>" +
-        (show ? '<span class="score">' + esc(String(score)) + "</span>" :
-                (ev._cls === "upcoming" ? "" : '<span class="score">–</span>')) + "</div>";
+    function row(name, badgeUrl, score, win, pen) {
+      var sc = show ? '<span class="score">' + esc(String(score)) + (pen != null ? '<span class="pk">(' + esc(String(pen)) + ")</span>" : "") + "</span>"
+                    : (ev._cls === "upcoming" ? "" : '<span class="score">–</span>');
+      return '<div class="team ' + win + '">' + badge(badgeUrl, name) + '<span class="name">' + esc(name || "TBD") + "</span>" + sc + "</div>";
+    }
+    var pensNote = "";
+    if (hasPens) {
+      var ph = parseInt(ev._penHome, 10), pa = parseInt(ev._penAway, 10);
+      var wname = ph > pa ? ev.strHomeTeam : ev.strAwayTeam;
+      pensNote = '<div class="m-pens">🥅 ' + esc(wname) + " won " + Math.max(ph, pa) + "–" + Math.min(ph, pa) + " on penalties</div>";
     }
     var venue = ev.strVenue ? '<div class="m-venue">📍 ' + esc(ev.strVenue) + (ev.strCity ? ", " + esc(ev.strCity) : "") + "</div>" : "";
     var isExp = !!expanded[ev.idEvent];
     var more = '<div class="m-more"><span class="moretxt">' + (isExp ? "Hide details" : "Match info") + '</span><span class="chev">▾</span></div>';
     return '<div class="match expandable ' + (ev._cls === "live" ? "islive " : "") + (isExp ? "expanded" : "") + '" data-eid="' + esc(ev.idEvent) + '">' +
       '<div class="m-top"><span class="m-stage">' + esc(stageLabel(ev)) + "</span>" + pillFor(ev) + "</div>" +
-      row(ev.strHomeTeam, ev.strHomeTeamBadge, ev.intHomeScore, hWin) +
-      row(ev.strAwayTeam, ev.strAwayTeamBadge, ev.intAwayScore, aWin) +
-      goalSummary(ev) + venue + more + matchDetail(ev) + "</div>";
+      row(ev.strHomeTeam, ev.strHomeTeamBadge, ev.intHomeScore, hWin, hasPens ? ev._penHome : null) +
+      row(ev.strAwayTeam, ev.strAwayTeamBadge, ev.intAwayScore, aWin, hasPens ? ev._penAway : null) +
+      pensNote + goalSummary(ev) + venue + more + matchDetail(ev) + "</div>";
   }
   function goalSummary(ev) {
     if (ev._cls === "upcoming") return "";
