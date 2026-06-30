@@ -540,8 +540,9 @@
   // window can turn "past" while it still holds a live/just-finished match — cover
   // yesterday→tomorrow, plus any window containing a match still flagged live.
   function windowsToRefresh() {
-    var set = {}, today = utcTodayStr(), yest = isoShift(today, -1), tom = isoShift(today, 1);
-    WINDOWS.forEach(function (r) { var w = winBounds(r); if (!(w.b < yest || w.a > tom)) set[r] = 1; });
+    var set = {}, today = utcTodayStr(), yest = isoShift(today, -1);
+    // today + every upcoming round (windows that haven't fully ended) so teams advancing into later rounds appear live
+    WINDOWS.forEach(function (r) { if (winBounds(r).b >= yest) set[r] = 1; });
     Object.keys(EVENTS).forEach(function (k) {
       var e = EVENTS[k]; if (e._cls !== "live") return;
       var d = (e.strTimestamp || "").slice(0, 10);
